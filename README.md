@@ -1,12 +1,13 @@
 <h1 align="center">Satpaper</h1>
 <h3 align="center">Display near-real-time satellite imagery on your desktop.</h3>
 
-Satpaper generates live wallpapers for your Linux desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
-
-It generates images like this:
 <p align = "center">
-<img src=".github/satpaper_latest.png" width = 512>
+<img src=".github/satpaper_latest.png" width = 768>
+<br>
+<i> (Click to see full-size version) </i>
 </p>
+
+Satpaper generates live wallpapers for your Linux desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
 
 There are several satellites to choose from, each covering a different region of the world.
 - GOES East (used in the sample image - covers most of North and South America)
@@ -15,9 +16,8 @@ There are several satellites to choose from, each covering a different region of
 - Meteosat 9 (Africa, Middle East, India, Central Asia)
 - Meteosat 10 (Atlantic Ocean, Africa, Europe)
 
-
 ## Warning - Data Usage
-Satpaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the area of twenty megabytes.
+Satpaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the ballpark of twenty megabytes.
 
 If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
 
@@ -28,7 +28,7 @@ Dependencies:
 - The most recent stable [Rust toolchain](https://rustup.rs/).
 - A C/C++ toolchain (such as `gcc`.)
 
-Just use `cargo install`, and Satpaper will be automatically compiled and added to your `PATH`.
+Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
 ```sh
 cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch latest
 ```
