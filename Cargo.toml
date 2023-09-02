@@ -1,0 +1,28 @@
+[package]
+name = "satpaper"
+authors = ["Colonial"]
+version = "0.1.0"
+edition = "2021"
+
+description = "Display near-real-time satellite imagery on your desktop."
+repository = "https://github.com/Colonial-Dev/satpaper"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Runtime
+anyhow = "1.0.75"
+log = "0.4.20"
+env_logger = "0.10.0"
+tokio = { version = "1.32.0", features = ["full"] }
+clap = { version = "4.4.2", features = ["derive", "env"] }
+
+# Compositing
+bytes = "1.4.0"
+image = "0.24.7"
+
+# Scraping
+reqwest = "0.11.20"
+serde = { version = "1.0.188", features = ["derive"] }
+serde_json = "1.0.105"
+
