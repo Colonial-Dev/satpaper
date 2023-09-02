@@ -55,7 +55,8 @@ pub async fn fetch_latest_image(config: &Config) -> Result<Image> {
             });
 
             (x, y, bytes_fut)
-        });
+        })
+        .collect::<Vec<_>>();
 
     for (x, y, fut) in tiles {
         let tile = image::load_from_memory_with_format(
