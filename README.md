@@ -7,7 +7,7 @@
 <i> (Click to see full-size version) </i>
 </p>
 
-Satpaper generates live wallpapers for your Linux desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
+Satpaper generates live wallpapers for your desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
 
 There are several satellites to choose from, each covering a different region of the world.
 - GOES East (used in the sample image - covers most of North and South America)
@@ -22,11 +22,17 @@ Satpaper downloads satellite imagery at the highest available resolution and dow
 If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
 
 ## Installation
-(**Note**: At the moment, only GNOME and KDE are supported, but feel free to make a PR for your DE of choice. Alternatively, you can use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated.)
+Environments with automatic support:
+- GNOME
+- KDE
+- Windows (tested to work on 10/11)
+
+If your environment is not supported, you can use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. PRs to add automatic support are also welcome!
 
 Dependencies:
 - The most recent stable [Rust toolchain](https://rustup.rs/).
 - A C/C++ toolchain (such as `gcc`.)
+- OpenSSL source (packaged as `libssl-dev` on Debian/Ubuntu and `openssl-devel` on Red Hat.)
 
 Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
 ```sh
@@ -49,6 +55,7 @@ Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
 
 ExecStart=/var/home/colonial/.cargo/bin/satpaper
 Restart=on-failure
+RestartSec=1
 
 [Install]
 WantedBy=default.target
