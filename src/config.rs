@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 
 #[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
 pub struct Config {
     /// The satellite to source imagery from.
     /// 
