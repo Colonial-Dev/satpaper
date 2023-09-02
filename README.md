@@ -30,7 +30,7 @@ Dependencies:
 
 Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
 ```sh
-cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch latest
+cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch master
 ```
 
 To automatically start Satpaper when you log in, you can use a `systemd` unit or equivalent.
@@ -60,3 +60,13 @@ nano $HOME/.config/systemd/user/satpaper.service
 systemctl --user enable satpaper
 systemctl --user start satpaper
 ```
+
+## FAQ
+
+### *Why are continents purple in night imagery?* / *Why does night imagery look kinda weird?*
+This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared imaging for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.
+
+Unfortunately, this is a necessary evil, as geostationary weather satellites don't capture enough visible spectrum light to generate a true-color night-time image.
+
+### *I live at `$EXTREME_LATITUDE` - is there a way to get better imagery of my location?*
+Not really. Geostationary orbits (required for the type of imaging we want) can only be achieved at a very specific altitude directly above the equator.
