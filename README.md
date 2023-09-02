@@ -22,7 +22,7 @@ Satpaper downloads satellite imagery at the highest available resolution and dow
 If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
 
 ## Installation
-(Note: At the moment, only GNOME and KDE are supported, but feel free to make a PR for your DE.)
+(**Note**: At the moment, only GNOME and KDE are supported, but feel free to make a PR for your DE of choice. Alternatively, you can use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated.)
 
 Dependencies:
 - The most recent stable [Rust toolchain](https://rustup.rs/).
