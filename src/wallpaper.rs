@@ -4,7 +4,7 @@ use std::env;
 use anyhow::{Result, Context};
 use tokio::process::Command;
 
-pub async fn set(path: impl AsRef<Path>) -> Result<()> {
+pub async fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
     let path = path
         .as_ref()
         .to_str()
@@ -16,11 +16,24 @@ pub async fn set(path: impl AsRef<Path>) -> Result<()> {
     log::debug!("XDG_CURRENT_DESKTOP is {desktop}.");
     log::debug!("Setting wallpaper to image at path {path}.");
 
-    match desktop.as_str() {
-        "GNOME" => set_gnome(path).await?,
-        "KDE" => set_kde(path).await?,
-        _ => panic!("Desktop {desktop} is not supported.")
+    match user_command {
+        Some(command) => set_userdefined(path, command).await?,
+        None => match desktop.as_str() {
+            "GNOME" => set_gnome(path).await?,
+            "KDE" => set_kde(path).await?,
+            _ => panic!("Desktop {desktop} is not supported."),
+        },
     }
+
+    Ok(())
+}
+
+async fn set_userdefined(path: &str, command: &str) -> Result<()> {
+    Command::new("sh")
+        .args(["-c", &format!("{command} file://{path}")])
+        .output()
+        .await
+        .context("failed to update wallpaper")?;
 
     Ok(())
 }

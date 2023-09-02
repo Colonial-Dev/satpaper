@@ -54,8 +54,10 @@ async fn update_wallpaper() -> Result<()> {
             ).await?;
 
             wallpaper::set(
-                config.target_path.join(OUTPUT_NAME)
-            ).await?;
+                config.target_path.join(OUTPUT_NAME),
+                config.wallpaper_command.as_deref(),
+            )
+            .await?;
 
             log::info!("New wallpaper composited and set.");
         }
