@@ -74,7 +74,7 @@ async fn set_gnome(path: &str) -> Result<()> {
 
 async fn set_windows(path: &str) -> Result<()> {
     // From https://c-nergy.be/blog/?p=15291
-    //! IMPORTANT - DO NOT CHANGE THE FORMATTING OF THE POWERSHELL SCRIPT
+    //! IMPORTANT - DO NOT CHANGE THE FORMATTING OF THE POWERSHELL SCRIPT as this will BREAK the script. [more info: https://github.com/PowerShell/PowerShell/issues/2337]
     let powershell_script = format!(
         r#"
 $code = @'
