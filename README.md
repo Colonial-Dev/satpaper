@@ -78,3 +78,13 @@ Unfortunately, this is a necessary evil, as geostationary weather satellites don
 
 ### *I live at `$EXTREME_LATITUDE` - is there a way to get better imagery of my location?*
 Not really. Geostationary orbits (required for the type of imaging we want) can only be achieved at a very specific altitude directly above the equator.
+
+### *Why am I seeing glitchy imagery from GOES East at night?*
+You're most likely seeing something like this:
+<p align="center">
+<img src=".github/goes_east_glitch.png">
+<p>
+
+This is not a software error, but is instead lens flare from the Sun peeking over from the other side of the Earth. This is caused by the Earth's tilt, and is most visible in late February and August.
+
+You can find a more detailed explanation [here](https://www.reddit.com/r/WeatherGifs/comments/pj25ht/comment/hbvs1wo).
