@@ -26,6 +26,8 @@ Environments with automatic support:
 - GNOME
 - KDE
 - Windows (tested to work on 10/11)
+- macOS (tested on Ventura)
+    - Satpaper will ask for System Event permission when running for the first time - you will need to grant access then restart the program for it to work.
 
 If your environment is not supported, you can use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. PRs to add automatic support are also welcome!
 
