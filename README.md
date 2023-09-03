@@ -32,6 +32,7 @@ If your environment is not supported, you can use the `--wallpaper-command`/`SAT
 Dependencies:
 - The most recent stable [Rust toolchain](https://rustup.rs/).
 - A C/C++ toolchain (such as `gcc`.)
+- OpenSSL source (packaged as `libssl-dev` on Debian/Ubuntu and `openssl-devel` on Red Hat.)
 
 Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
 ```sh
@@ -54,6 +55,7 @@ Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
 
 ExecStart=/var/home/colonial/.cargo/bin/satpaper
 Restart=on-failure
+RestartSec=1
 
 [Install]
 WantedBy=default.target
