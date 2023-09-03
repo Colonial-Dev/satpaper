@@ -17,7 +17,7 @@ const SLEEP_DURATION: Duration = Duration::from_secs(60);
 #[tokio::main]
 async fn main() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "debug");
+        std::env::set_var("RUST_LOG", "info");
     }
 
     env_logger::init();
