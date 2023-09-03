@@ -30,6 +30,9 @@ pub async fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<(
         "windows" => {
             set_windows(path).await?;
         }
+        "macos" => {
+            set_mac(path).await?;
+        }
         _ => panic!("Operating system not supported."),
     }
 
@@ -109,6 +112,22 @@ add-type $code
         .output()
         .await
         .context("PowerShell failed to update wallpaper")?;
+
+    Ok(())
+}
+
+async fn set_mac(path: &str) -> Result<()> {
+    let applescript = format!(
+        r#"tell application "System Events" to set picture of every desktop to "{}""#,
+        path
+    );
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(&applescript)
+        .output()
+        .await
+        .context("Failed to set wallpaper using AppleScript")?;
 
     Ok(())
 }
