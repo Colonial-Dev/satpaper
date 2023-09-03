@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod config;
 mod slider;
 mod wallpaper;
@@ -12,6 +15,7 @@ use config::*;
 
 const OUTPUT_NAME: &str = "satpaper_latest.png";
 const SLEEP_DURATION: Duration = Duration::from_secs(60);
+
 
 #[tokio::main]
 async fn main() -> Result<()> {

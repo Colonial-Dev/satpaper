@@ -22,14 +22,23 @@ Satpaper downloads satellite imagery at the highest available resolution and dow
 If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
 
 ## Installation
-Environments with automatic support:
+### Automatically Supported Environments
 - GNOME
 - KDE
 - Windows (tested to work on 10/11)
-- macOS (tested on Ventura)
+- macOS (tested to work on Ventura)
     - Satpaper will ask for System Event permission when running for the first time - you will need to grant access then restart the program for it to work.
 
-If your environment is not supported, you can use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. PRs to add automatic support are also welcome!
+If your environment is not supported, you have a few options:
+- Use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. 
+- Use the `--once` flag to turn Satpaper into a one-off wallpaper generator, allowing it to be integrated into a larger script or program.
+
+PRs to add automatic support are also welcome!
+
+### Precompiled Binaries
+Precompiled versions of Satpaper are available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section.
+
+### From Source
 
 Dependencies:
 - The most recent stable [Rust toolchain](https://rustup.rs/).
@@ -56,7 +65,7 @@ Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
 
 ExecStart=/var/home/colonial/.cargo/bin/satpaper
 Restart=on-failure
-RestartSec=1
+RestartSec=5
 
 [Install]
 WantedBy=default.target
@@ -72,7 +81,7 @@ systemctl --user start satpaper
 ## FAQ
 
 ### *Why are continents purple in night imagery?* / *Why does night imagery look kinda weird?*
-This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared imaging for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.
+This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.
 
 Unfortunately, this is a necessary evil, as geostationary weather satellites don't capture enough visible spectrum light to generate a true-color night-time image.
 
