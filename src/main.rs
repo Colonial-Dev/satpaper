@@ -63,6 +63,10 @@ async fn update_wallpaper() -> Result<()> {
             log::info!("New wallpaper composited and set.");
         }
 
+        if config.once {
+            return Ok(());
+        }
+
         log::debug!("Sleeping for {SLEEP_DURATION:?}...");
 
         sleep(SLEEP_DURATION).await

@@ -43,6 +43,17 @@ pub struct Config {
     /// The command will be ran as `bash -c "{wallpaper_command} {image_path}"`
     #[arg(short, long, env = "SATPAPER_WALLPAPER_COMMAND")]
     pub wallpaper_command: Option<String>,
+    /// Whether or not to only run once.
+    /// 
+    /// By default, Satpaper is designed to run in the background - it stays resident once launched
+    /// and peroidically attempts to update your wallpaper.
+    /// 
+    /// With --once set, Satpaper will instead generate one wallpaper and terminate, without
+    /// affecting your existing wallpaper or staying resident.
+    /// 
+    /// This is ideal if you want to use Satpaper as a simple wallpaper generator or as part of a larger script/program.
+    #[arg(short, long, env = "SATPAPER_ONCE", default_value_t = false)]
+    pub once: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
