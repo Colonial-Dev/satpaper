@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
     /// The satellite to source imagery from.
@@ -26,7 +26,8 @@ pub struct Config {
     /// The Y resolution/height of the generated wallpaper.
     #[arg(short = 'y', long, env = "SATPAPER_RESOLUTION_Y")]
     pub resolution_y: u32,
-    /// The size of the "disk" (Earth) relative to the generated wallpaper's height.
+    /// The size of the "disk" (Earth) relative to the generated wallpaper's
+    /// smaller dimension.
     /// 
     /// Values in the 90-95 range are the best if you want maximum detail.
     #[arg(short, long, value_parser = clap::value_parser!(u32).range(1..=100), env = "SATPAPER_DISK_SIZE")]

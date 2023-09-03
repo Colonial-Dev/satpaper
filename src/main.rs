@@ -1,9 +1,8 @@
-#![warn(clippy::all)]
-
 mod config;
-mod composite;
 mod slider;
 mod wallpaper;
+
+use std::sync::Arc;
 
 use anyhow::{Result, Context};
 use clap::Parser;
@@ -32,6 +31,8 @@ async fn main() -> Result<()> {
 
 async fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
+    let config = Arc::new(config);
+    
     let mut timestamp = None;
     
     loop  {
@@ -49,8 +50,8 @@ async fn update_wallpaper() -> Result<()> {
 
             timestamp = Some(new);
             
-            composite::generate(
-                &config, 
+            slider::composite_latest_image(
+                config.clone(), 
             ).await?;
 
             wallpaper::set(

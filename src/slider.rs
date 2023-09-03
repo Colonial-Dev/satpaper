@@ -1,35 +1,37 @@
+use std::sync::Arc;
+
 use anyhow::Result;
+use image::*;
+use reqwest::Client;
 use serde::Deserialize;
+use tokio::task;
 
-use super::Config;
-
-type Image = image::ImageBuffer<image::Rgba<u8>, Vec<u8>>;
+use super::{
+    Config,
+    OUTPUT_NAME
+};
 
 const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
 const SLIDER_PRODUCT: &str = "geocolor";
 
-pub async fn fetch_latest_image(config: &Config) -> Result<Image> {
-    use image::imageops;
-    use image::RgbaImage;
-    use image::ImageFormat;
-    use image::EncodableLayout;
-    use reqwest::Client;
-
+pub async fn composite_latest_image(config: Arc<Config>) -> Result<()> {
     let image_size = config.satellite.image_size() as u32;
     let tile_count = config.satellite.tile_count();
     let tile_size = config.satellite.tile_size();
 
     let client = Client::new();
-    let time = Time::fetch(config).await?;
-    let (year, month, day) = Date::fetch(config).await?.split();
+    let time = Time::fetch(&config).await?;
+    let (year, month, day) = Date::fetch(&config).await?.split();
 
     let mut stitched = RgbaImage::new(
         image_size,
         image_size
     );
 
-    let tiles = (0..tile_count)
+    log::info!("Downloading tiles...");
+
+    let tiles: Vec<_> = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
                 .map(move |y| (x, y))
@@ -44,7 +46,7 @@ pub async fn fetch_latest_image(config: &Config) -> Result<Image> {
 
             let client = client.clone();
 
-            let bytes_fut = tokio::task::spawn(async move {
+            let bytes_fut = task::spawn(async move {
                 let request = client.get(url).build()?;
 
                 client
@@ -56,23 +58,88 @@ pub async fn fetch_latest_image(config: &Config) -> Result<Image> {
 
             (x, y, bytes_fut)
         })
-        .collect::<Vec<_>>();
+        .collect();
+    
+    log::info!("Stitching tiles...");
 
     for (x, y, fut) in tiles {
-        let tile = image::load_from_memory_with_format(
-            fut.await??.as_bytes(),
-            ImageFormat::Png
-        )?;
+        let tile = fut
+            .await
+            .unwrap()?;
+
+        task::block_in_place(|| -> Result<_> {
+            let tile = image::load_from_memory_with_format(
+                tile.as_bytes(),
+                ImageFormat::Png
+            )?;
+    
+            imageops::overlay(
+                &mut stitched,
+                &tile,
+                (y * tile_size) as i64,
+                (x * tile_size) as i64
+            );
+
+            Ok(())
+        })?;
+    }
+
+    log::info!("Compositing...");
+
+    task::spawn_blocking(move || -> Result<_> {
+        use std::cmp::Ordering::*;
+        use image::imageops::FilterType;
+
+        let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
+            Less => config.resolution_x,
+            Equal => config.resolution_x,
+            Greater => config.resolution_y,
+        };
+
+        let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
+        let disk_dim = disk_dim.floor() as u32;
+
+        log::info!("Resizing source image...");
+
+        let source = imageops::resize(
+            &stitched,
+            disk_dim,
+            disk_dim,
+            FilterType::Lanczos3
+        );
+
+        log::info!("Generating destination image...");
+
+        let mut destination = ImageBuffer::new(
+            config.resolution_x,
+            config.resolution_y
+        );
+
+        for (_, _, pixel) in destination.enumerate_pixels_mut() {
+            *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
+        }
+
+        log::info!("Compositing source into destination...");
 
         imageops::overlay(
-            &mut stitched,
-            &tile,
-            (y * tile_size) as i64,
-            (x * tile_size) as i64
+            &mut destination,
+            &source,
+            ((config.resolution_x - disk_dim) / 2) as i64,
+            ((config.resolution_y - disk_dim) / 2) as i64
         );
-    }
+
+        log::info!("Compositing complete.");
+
+        destination.save(
+            config.target_path.join(OUTPUT_NAME)
+        )?;
     
-    Ok(stitched)
+        log::info!("Output saved.");    
+
+        Ok(())
+    })
+    .await
+    .unwrap()
 }
 
 pub async fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
@@ -155,14 +222,10 @@ impl Date {
             self.as_int()
         );
 
-        let chars: Vec<_> = str
-            .chars()
-            .collect();
-
         (
-            chars[0..=3].iter().collect(),
-            chars[4..=5].iter().collect(),
-            chars[6..=7].iter().collect()
+            str[0..=3].to_owned(),
+            str[4..=5].to_owned(),
+            str[6..=7].to_owned()
         )
     }
 }
