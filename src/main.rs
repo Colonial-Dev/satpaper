@@ -70,6 +70,18 @@ async fn update_wallpaper() -> Result<()> {
         if config.once {
             return Ok(());
         }
+        
+        // Safety: as far as I can tell, this function doesn't have any safety
+        // preconditions?
+        //
+        // Even the official C documentation doesn't document any invariants etc -
+        // it only mentions that it's intended for specific niche cases (which we happen to be one of!)
+        unsafe {
+            // Aggressively return as much memory to the operating system as possible.
+            //
+            // (Yes, this is necessary.)
+            libmimalloc_sys::mi_collect(true);
+        }
 
         log::debug!("Sleeping for {SLEEP_DURATION:?}...");
 

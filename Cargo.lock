@@ -275,6 +275,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "cty"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
+
+[[package]]
 name = "either"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -690,6 +696,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25d058a81af0d1c22d7a1c948576bee6d673f7af3c0f35564abd6c81122f513d"
 dependencies = [
  "cc",
+ "cty",
  "libc",
 ]
 
@@ -1110,6 +1117,7 @@ dependencies = [
  "clap",
  "env_logger",
  "image",
+ "libmimalloc-sys",
  "log",
  "mimalloc",
  "reqwest",
