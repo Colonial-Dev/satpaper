@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use image::*;
-use reqwest::Client;
 use serde::Deserialize;
-use tokio::task;
+use ureq::Agent;
 
 use super::{
     Config,
@@ -15,14 +14,23 @@ const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
 const SLIDER_PRODUCT: &str = "geocolor";
 
-pub async fn composite_latest_image(config: Arc<Config>) -> Result<()> {
+pub fn composite_latest_image(config: &Arc<Config>) -> Result<()> {
+    composite(
+        config,
+        download(config)?
+    )
+}
+
+fn download(config: &Arc<Config>) -> Result<DynamicImage> {
     let image_size = config.satellite.image_size() as u32;
     let tile_count = config.satellite.tile_count();
     let tile_size = config.satellite.tile_size();
 
-    let client = Client::new();
-    let time = Time::fetch(&config).await?;
-    let (year, month, day) = Date::fetch(&config).await?.split();
+    let config = config.clone();
+    let agent = Agent::new();
+
+    let time = Time::fetch(&config)?;
+    let (year, month, day) = Date::fetch(&config)?.split();
 
     let mut stitched = RgbaImage::new(
         image_size,
@@ -44,19 +52,37 @@ pub async fn composite_latest_image(config: Arc<Config>) -> Result<()> {
                 config.satellite.max_zoom()
             );
 
-            let client = client.clone();
+            let agent = agent.clone();
 
-            let bytes_fut = task::spawn(async move {
-                let request = client.get(url).build()?;
+            let bytes_handle = std::thread::spawn(move || -> Result<_> {
+                use std::io::Read;
 
-                client
-                    .execute(request)
-                    .await?
-                    .bytes()
-                    .await
+                log::debug!("Scraping thread spawned for tile at ({x}, {y}.)");
+
+                let resp = agent
+                    .get(&url)
+                    .call()?;
+
+                let len: usize = resp.header("Content-Length")
+                    .expect("Response header should have Content-Length")
+                    .parse()?;
+
+                let mut buf = Vec::with_capacity(len);
+
+                resp
+                    .into_reader()
+                    .take(10_000_000)
+                    .read_to_end(&mut buf)?;
+
+                log::debug!(
+                    "Finished scraping tile at ({x}, {y}). Size: {}mB",
+                    len as f32 / 1024.0 / 1024.0
+                );
+
+                Ok(buf)
             });
 
-            (x, y, bytes_fut)
+            (x, y, bytes_handle)
         })
         .collect();
     
@@ -64,89 +90,82 @@ pub async fn composite_latest_image(config: Arc<Config>) -> Result<()> {
 
     for (x, y, fut) in tiles {
         let tile = fut
-            .await
+            .join()
             .unwrap()?;
 
-        task::block_in_place(|| -> Result<_> {
-            let tile = image::load_from_memory_with_format(
-                tile.as_bytes(),
-                ImageFormat::Png
-            )?;
-    
-            imageops::overlay(
-                &mut stitched,
-                &tile,
-                (y * tile_size) as i64,
-                (x * tile_size) as i64
-            );
+        let tile = image::load_from_memory_with_format(
+            tile.as_bytes(),
+            ImageFormat::Png
+        )?;
 
-            Ok(())
-        })?;
+        imageops::overlay(
+            &mut stitched,
+            &tile,
+            (y * tile_size) as i64,
+            (x * tile_size) as i64
+        );
     }
+
+    Ok(stitched.into())
+}
+
+fn composite(config: &Arc<Config>, image: DynamicImage) -> Result<()> {
+    use std::cmp::Ordering::*;
+    use image::imageops::FilterType;
 
     log::info!("Compositing...");
 
-    task::spawn_blocking(move || -> Result<_> {
-        use std::cmp::Ordering::*;
-        use image::imageops::FilterType;
+    let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
+        Less => config.resolution_x,
+        Equal => config.resolution_x,
+        Greater => config.resolution_y,
+    };
 
-        let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
-            Less => config.resolution_x,
-            Equal => config.resolution_x,
-            Greater => config.resolution_y,
-        };
+    let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
+    let disk_dim = disk_dim.floor() as u32;
 
-        let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
-        let disk_dim = disk_dim.floor() as u32;
+    log::info!("Resizing source image...");
 
-        log::info!("Resizing source image...");
+    let source = imageops::resize(
+        &image,
+        disk_dim,
+        disk_dim,
+        FilterType::Lanczos3
+    );
 
-        let source = imageops::resize(
-            &stitched,
-            disk_dim,
-            disk_dim,
-            FilterType::Lanczos3
-        );
+    log::info!("Generating destination image...");
 
-        log::info!("Generating destination image...");
+    let mut destination = ImageBuffer::new(
+        config.resolution_x,
+        config.resolution_y
+    );
 
-        let mut destination = ImageBuffer::new(
-            config.resolution_x,
-            config.resolution_y
-        );
+    for (_, _, pixel) in destination.enumerate_pixels_mut() {
+        *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
+    }
 
-        for (_, _, pixel) in destination.enumerate_pixels_mut() {
-            *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
-        }
+    log::info!("Compositing source into destination...");
 
-        log::info!("Compositing source into destination...");
+    imageops::overlay(
+        &mut destination,
+        &source,
+        ((config.resolution_x - disk_dim) / 2) as i64,
+        ((config.resolution_y - disk_dim) / 2) as i64
+    );
 
-        imageops::overlay(
-            &mut destination,
-            &source,
-            ((config.resolution_x - disk_dim) / 2) as i64,
-            ((config.resolution_y - disk_dim) / 2) as i64
-        );
+    log::info!("Compositing complete.");
 
-        log::info!("Compositing complete.");
+    destination.save(
+        config.target_path.join(OUTPUT_NAME)
+    )?;
 
-        destination.save(
-            config.target_path.join(OUTPUT_NAME)
-        )?;
-    
-        log::info!("Output saved.");    
+    log::info!("Output saved.");
 
-        Ok(())
-    })
-    .await
-    .unwrap()
+    Ok(())
 }
 
-pub async fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
-    Ok(Time::fetch(config)
-        .await?
-        .as_int()
-    )   
+pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
+    Ok(Time::fetch(config)?.as_int())   
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,16 +175,15 @@ struct Time {
 }
 
 impl Time {
-    pub async fn fetch(config: &Config) -> Result<Self> {
+    pub fn fetch(config: &Config) -> Result<Self> {
         let url = format!(
             "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/latest_times.json",
             config.satellite.id()
         );
         
-        let json = reqwest::get(url)
-            .await?
-            .text()
-            .await?;
+        let json = ureq::get(&url)
+            .call()?
+            .into_string()?;
 
         let mut new: Self = serde_json::from_str(&json)?;
 
@@ -190,16 +208,15 @@ struct Date {
 }
 
 impl Date {
-    pub async fn fetch(config: &Config) -> Result<Self> {
+    pub fn fetch(config: &Config) -> Result<Self> {
         let url = format!(
             "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/available_dates.json",
             config.satellite.id()
         );
 
-        let json = reqwest::get(url)
-            .await?
-            .text()
-            .await?;
+        let json = ureq::get(&url)
+            .call()?
+            .into_string()?;
 
         let mut new: Self= serde_json::from_str(&json)?;
 

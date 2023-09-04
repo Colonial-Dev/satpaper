@@ -1,9 +1,10 @@
-use anyhow::{Context, Result};
 use std::env;
 use std::path::Path;
-use tokio::process::Command;
+use std::process::Command;
 
-pub async fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
+use anyhow::{Context, Result};
+
+pub fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
     let path = path
         .as_ref()
         .to_str()
@@ -19,19 +20,19 @@ pub async fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<(
                 .context("Failed to get XDG_CURRENT_DESKTOP environment variable")?;
 
             match user_command {
-                Some(command) => set_userdefined(path, command).await?,
+                Some(command) => set_userdefined(path, command)?,
                 None => match desktop.as_str() {
-                    "GNOME" => set_gnome(path).await?,
-                    "KDE" => set_kde(path).await?,
+                    "GNOME" => set_gnome(path)?,
+                    "KDE" => set_kde(path)?,
                     _ => panic!("Desktop {desktop} is not supported."),
                 },
             }
         }
         "windows" => {
-            set_windows(path).await?;
+            set_windows(path)?;
         }
         "macos" => {
-            set_mac(path).await?;
+            set_mac(path)?;
         }
         _ => panic!("Operating system not supported."),
     }
@@ -39,21 +40,19 @@ pub async fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<(
     Ok(())
 }
 
-async fn set_userdefined(path: &str, command: &str) -> Result<()> {
+fn set_userdefined(path: &str, command: &str) -> Result<()> {
     Command::new("sh")
         .args(["-c", &format!("{command} file://{path}")])
         .output()
-        .await
         .context("failed to update wallpaper")?;
 
     Ok(())
 }
 
-async fn set_gnome(path: &str) -> Result<()> {
+fn set_gnome(path: &str) -> Result<()> {
     let color_scheme = Command::new("gsettings")
         .args(["get", "org.gnome.desktop.interface", "color-scheme"])
         .output()
-        .await
         .context("Failed to get preferred color scheme from GSettings")?;
 
     let uri = match String::from_utf8(color_scheme.stdout)?.trim() {
@@ -69,13 +68,12 @@ async fn set_gnome(path: &str) -> Result<()> {
             &format!("file://{path}"),
         ])
         .output()
-        .await
         .context("GSettings failed to update wallpaper")?;
 
     Ok(())
 }
 
-async fn set_windows(path: &str) -> Result<()> {
+fn set_windows(path: &str) -> Result<()> {
     // From https://c-nergy.be/blog/?p=15291
     //! IMPORTANT - DO NOT CHANGE THE FORMATTING OF THE POWERSHELL SCRIPT as this will BREAK the script. [more info: https://github.com/PowerShell/PowerShell/issues/2337]
     let powershell_script = format!(
@@ -110,13 +108,12 @@ add-type $code
             &powershell_script,
         ])
         .output()
-        .await
         .context("PowerShell failed to update wallpaper")?;
 
     Ok(())
 }
 
-async fn set_mac(path: &str) -> Result<()> {
+fn set_mac(path: &str) -> Result<()> {
     let applescript = format!(
         r#"tell application "System Events" to set picture of every desktop to "{}""#,
         path
@@ -126,13 +123,12 @@ async fn set_mac(path: &str) -> Result<()> {
         .arg("-e")
         .arg(&applescript)
         .output()
-        .await
         .context("Failed to set wallpaper using AppleScript")?;
 
     Ok(())
 }
 
-async fn set_kde(path: &str) -> Result<()> {
+fn set_kde(path: &str) -> Result<()> {
     // From https://superuser.com/questions/488232
     Command::new("qdbus")
         .args([
@@ -155,7 +151,6 @@ async fn set_kde(path: &str) -> Result<()> {
             ),
         ])
         .output()
-        .await
         .context("Failed to set wallpaper with qdbus")?;
 
     Ok(())

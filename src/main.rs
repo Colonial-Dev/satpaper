@@ -1,39 +1,37 @@
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 mod config;
 mod slider;
 mod wallpaper;
 
+use std::time::Duration;
+use std::thread::sleep;
 use std::sync::Arc;
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use tokio::time::{sleep, Duration};
+use mimalloc::MiMalloc;
 
 use config::*;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 const OUTPUT_NAME: &str = "satpaper_latest.png";
 const SLEEP_DURATION: Duration = Duration::from_secs(60);
 
-
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
 
     env_logger::init();
     
-    tokio::task::spawn(update_wallpaper())
-        .await
-        .context("Wallpaper updating task panicked")?
-        .context("An error occurred in the wallpaper updating task")?;
+    update_wallpaper()
+        .context("An error occurred in the wallpaper updating loop")?;
 
     Ok(())
 }
 
-async fn update_wallpaper() -> Result<()> {
+fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
     let config = Arc::new(config);
     
@@ -42,7 +40,7 @@ async fn update_wallpaper() -> Result<()> {
     loop  {
         log::info!("Checking timestamp...");
 
-        let new = slider::fetch_latest_timestamp(&config).await?;
+        let new = slider::fetch_latest_timestamp(&config)?;
 
         if timestamp
             .map(|old| old != new)
@@ -54,15 +52,12 @@ async fn update_wallpaper() -> Result<()> {
 
             timestamp = Some(new);
             
-            slider::composite_latest_image(
-                config.clone(), 
-            ).await?;
+            slider::composite_latest_image(&config)?;
 
             wallpaper::set(
                 config.target_path.join(OUTPUT_NAME),
                 config.wallpaper_command.as_deref(),
-            )
-            .await?;
+            )?;
 
             log::info!("New wallpaper composited and set.");
         }
@@ -85,7 +80,7 @@ async fn update_wallpaper() -> Result<()> {
 
         log::debug!("Sleeping for {SLEEP_DURATION:?}...");
 
-        sleep(SLEEP_DURATION).await
+        sleep(SLEEP_DURATION)
     }
 
     #[allow(unreachable_code)]
