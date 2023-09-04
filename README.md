@@ -36,7 +36,7 @@ If your environment is not supported, you have a few options:
 PRs to add automatic support are also welcome!
 
 ### Precompiled Binaries
-Precompiled versions of Satpaper are available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section.
+Precompiled versions of Satpaper will be available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section. (They are currently on hold while I work out some allocator/RAM usage weirdness.)
 
 ### From Source
 
