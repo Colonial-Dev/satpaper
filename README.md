@@ -80,6 +80,14 @@ systemctl --user start satpaper
 
 ## FAQ
 
+### *Why is Satpaper using hundreds of megs of RAM?*
+
+The short answer is allocator weirdness - I'm actively trying to figure out a fix.
+
+The long answer: Satpaper *does* need several hundred megabytes of RAM when doing compositing - the raw satellite imagery alone is ~450 megabytes after being decompressed and stitched together - and this memory *is* freed upon completion. Valgrind/Massif come out clean, the works.
+
+The issue lies in the fact that (at least on Linux - I haven't tested it elsewhere) `libc`'s `free` seems to think it's fine to just... not return that memory to the operating system. I'm hoping that a correctly-configured alternative allocator (such as `jemalloc` or `mimalloc`) will prevent this issue.
+
 ### *Why are continents purple in night imagery?* / *Why does night imagery look kinda weird?*
 This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.
 
