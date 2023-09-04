@@ -36,7 +36,7 @@ If your environment is not supported, you have a few options:
 PRs to add automatic support are also welcome!
 
 ### Precompiled Binaries
-Precompiled versions of Satpaper will be available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section. (They are currently on hold while I work out some allocator/RAM usage weirdness.)
+Precompiled versions of Satpaper are available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section.
 
 ### From Source
 
@@ -82,11 +82,9 @@ systemctl --user start satpaper
 
 ### *Why is Satpaper using hundreds of megs of RAM?*
 
-The short answer is allocator weirdness - I'm actively trying to figure out a fix.
-
-The long answer: Satpaper *does* need several hundred megabytes of RAM when doing compositing - the raw satellite imagery alone is ~450 megabytes after being decompressed and stitched together - and this memory *is* freed upon completion. Valgrind/Massif come out clean, the works.
-
-The issue lies in the fact that (at least on Linux - I haven't tested it elsewhere) `libc`'s `free` seems to think it's fine to just... not return that memory to the operating system. I'm hoping that a correctly-configured alternative allocator (such as `jemalloc` or `mimalloc`) will prevent this issue.
+There are two possible causes:
+- You're seeing RAM usage spike to 500+ megabytes whenever Satpaper is compositing a new wallpaper. This is expected and unavoidable - the raw satellite imagery alone is ~450 megabytes after being decompressed and stitched together. However, this spike should only last several seconds - once composition is complete, the image buffers are all freed, and `libmimalloc_sys::mi_collect` is called to ensure as much memory as possible is returned to the OS.
+- You're using an early version of Satpaper. Early versions had issues with `libc`'s `free` deciding it was fine to just... not return multi-hundred-megabyte allocations to the OS, as well as the `tokio` runtime being fairly memory heavy. I resolved these issues by switching to `mimalloc` and transitioning away from async, so behavior *should* improve if you update.
 
 ### *Why are continents purple in night imagery?* / *Why does night imagery look kinda weird?*
 This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.
