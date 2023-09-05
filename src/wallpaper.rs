@@ -22,7 +22,9 @@ pub fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
             match user_command {
                 Some(command) => set_userdefined(path, command)?,
                 None => match desktop.as_str() {
-                    "GNOME" => set_gnome(path)?,
+                    // https://github.com/Colonial-Dev/satpaper/issues/7
+                    // Ubuntu don't be special for no reason challenge (impossible)
+                    "GNOME" | "ubuntu:GNOME" => set_gnome(path)?,
                     "KDE" => set_kde(path)?,
                     _ => panic!("Desktop {desktop} is not supported."),
                 },
