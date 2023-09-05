@@ -54,16 +54,16 @@ fn update_wallpaper() -> Result<()> {
             
             slider::composite_latest_image(&config)?;
 
+            if config.once {
+                return Ok(());
+            }
+
             wallpaper::set(
                 config.target_path.join(OUTPUT_NAME),
                 config.wallpaper_command.as_deref(),
             )?;
 
             log::info!("New wallpaper composited and set.");
-        }
-
-        if config.once {
-            return Ok(());
         }
         
         // Safety: as far as I can tell, this function doesn't have any safety
