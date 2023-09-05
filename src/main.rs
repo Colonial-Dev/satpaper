@@ -4,7 +4,6 @@ mod wallpaper;
 
 use std::time::Duration;
 use std::thread::sleep;
-use std::sync::Arc;
 
 use anyhow::{Result, Context};
 use clap::Parser;
@@ -33,7 +32,6 @@ fn main() -> Result<()> {
 
 fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
-    let config = Arc::new(config);
     
     let mut timestamp = None;
     
