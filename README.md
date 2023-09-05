@@ -78,6 +78,26 @@ systemctl --user enable satpaper
 systemctl --user start satpaper
 ```
 
+## Command Line Options
+- `-s`/`--satellite`/`SATPAPER_SATELLITE` - the satellite to source imagery from. 
+    - Possible values: `goes-east`, `goes-west`, `himawari`, `meteosat9`, and `meteosat10`.
+- `-x`/`--resolution-x`/`SATPAPER_RESOLUTION_X` (and equivalents for the `y` dimension) - the width/height of the generated wallpaper.
+    - Any arbitary resolution should work, including vertical aspect ratios.
+- `-d`/`--disk-size`/`SATPAPER_DISK_SIZE` - the size of the "disk" (Earth) relative to the generated wallpaper's smaller dimension.
+    - Required to be an integer value in the range `[1, 100]` inclusive, mapping to a percentage value.
+    - For most desktop environments, a value in the 90-95 range will give the most detail while preventing parts from being cut off by UI elements like taskbars.
+    - Note that even with a value of 100, there will still be some "buffer"/empty space between the Earth and the image edge. This is because the source image is square with no background transparency.
+- `-t`/`--target-path`/`SATPAPER_TARGET_PATH` - where the generated wallpaper should be saved.
+    - Satpaper will output to a file called "satpaper_latest.png" at this path.
+    - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/satpaper_latest.png`.
+- `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
+    - This overrides the automatic update handling.
+    - Currently, this only works on Unix. The command will be run as `sh -c "{command} file://{image_path}`.
+- `-o`/`--once`/`SATPAPER_ONCE` - whether or not to only run once.
+    - By default, Satpaper is designed to run as a daemon - it stays resident once launched and periodically attempts to update your wallpaper.
+    - With `--once` set, Satpaper will generate one wallpaper and terminate, without altering your existing wallpaper.
+    - This is ideal if you want to use Satpaper as a simple wallpaper generator or as part of a larger script/program.
+
 ## FAQ
 
 ### *Why is Satpaper using hundreds of megs of RAM?*

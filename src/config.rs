@@ -46,7 +46,7 @@ pub struct Config {
     /// Whether or not to only run once.
     /// 
     /// By default, Satpaper is designed to run in the background - it stays resident once launched
-    /// and peroidically attempts to update your wallpaper.
+    /// and periodically attempts to update your wallpaper.
     /// 
     /// With --once set, Satpaper will instead generate one wallpaper and terminate, without
     /// affecting your existing wallpaper or staying resident.

@@ -46,7 +46,7 @@ fn set_userdefined(path: &str, command: &str) -> Result<()> {
     Command::new("sh")
         .args(["-c", &format!("{command} file://{path}")])
         .output()
-        .context("failed to update wallpaper")?;
+        .context("Failed to update wallpaper with custom command")?;
 
     Ok(())
 }
