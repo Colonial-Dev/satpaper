@@ -9,7 +9,7 @@ use anyhow::{Result, Context};
 use clap::Parser;
 use mimalloc::MiMalloc;
 
-use config::*;
+use crate::config::*;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -83,4 +83,28 @@ fn update_wallpaper() -> Result<()> {
 
     #[allow(unreachable_code)]
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_wallpaper() -> Result<()> {
+        let config = Config {
+            satellite: Satellite::GOESEast,
+            resolution_x: 2556,
+            resolution_y: 1440,
+            disk_size: 95,
+            target_path: ".".into(),
+            wallpaper_command: None,
+            once: false
+        };
+
+        slider::composite_latest_image(&config)?;
+
+        std::fs::remove_file("./satpaper_latest.png")?;
+
+        Ok(())
+    }
 }

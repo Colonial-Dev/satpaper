@@ -1,0 +1,58 @@
+# i hate yaml so much
+# semantic whitespace ass config format
+# "wrong syntax on line 42" REAL HELPFUL
+
+name: Release
+
+on: workflow_dispatch
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install MUSL dependencies
+        run: sudo apt-get install -y musl-tools
+      - name: Install MUSL toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            target: x86_64-unknown-linux-musl
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: satpaper-x86_64-unknown-linux-musl
+          path: target/x86_64-unknown-linux-musl/release/satpaper
+  build-win:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --release
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: satpaper-x86_64-pc-windows-gnu.exe
+          path: target/release/satpaper.exe
+  build-mac:
+    name: Build (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --release
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: satpaper-x86_64-apple-darwin
+          path: target/release/satpaper

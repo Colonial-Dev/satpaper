@@ -1,6 +1,12 @@
 <h1 align="center">Satpaper</h1>
 <h3 align="center">Display near-real-time satellite imagery on your desktop.</h3>
 
+<p align="center">
+<img src="https://img.shields.io/github/actions/workflow/status/Colonial-Dev/Satpaper/rust.yml">
+<img src="https://img.shields.io/github/license/Colonial-Dev/Satpaper">
+<img src="https://img.shields.io/github/stars/Colonial-Dev/Satpaper">
+</p>
+
 <p align = "center">
 <img src=".github/satpaper_latest.png" width = 768>
 <br>
@@ -36,7 +42,12 @@ If your environment is not supported, you have a few options:
 PRs to add automatic support are also welcome!
 
 ### Precompiled Binaries
-Precompiled versions of Satpaper are available for Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) and Windows in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section.
+Precompiled versions of Satpaper are available for:
+- Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) 
+- Windows (compiled on Github actions `windows-latest`)
+- macOS (compiled on Github actions `macos-latest`)
+
+All binaries can be found in the [releases](https://github.com/Colonial-Dev/satpaper/releases) section. Additionally, please note that I'm only able to test the Linux binary - please open an issue if there's something wrong with the binary for your platform (doesn't work at all, only works on the newest version, whatever.)
 
 ### From Source
 
