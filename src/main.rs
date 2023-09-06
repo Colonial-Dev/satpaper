@@ -38,7 +38,12 @@ fn update_wallpaper() -> Result<()> {
     loop  {
         log::info!("Checking timestamp...");
 
-        let new = slider::fetch_latest_timestamp(&config)?;
+        let new = slider::fetch_latest_timestamp(&config)
+            .unwrap_or_else(|err| {
+                log::error!("Failed to fetch latest timestamp: {err}");
+                log::error!("Check aborted; waiting until next go round.");
+                timestamp.unwrap_or(0)
+            });
 
         if timestamp
             .map(|old| old != new)
@@ -47,21 +52,21 @@ fn update_wallpaper() -> Result<()> {
             log::info!("Timestamp has changed!");
             log::debug!("Old timestamp: {timestamp:?}, new timestamp: {new}");
             log::info!("Fetching updated source and compositing new wallpaper...");
-
-            timestamp = Some(new);
             
-            slider::composite_latest_image(&config)?;
+            if slider::composite_latest_image(&config)? {
+                timestamp = Some(new);
 
-            if config.once {
-                return Ok(());
+                if config.once {
+                    return  Ok(());
+                }
+
+                wallpaper::set(
+                    config.target_path.join(OUTPUT_NAME),
+                    config.wallpaper_command.as_deref(),
+                )?;
+
+                log::info!("New wallpaper composited and set.");
             }
-
-            wallpaper::set(
-                config.target_path.join(OUTPUT_NAME),
-                config.wallpaper_command.as_deref(),
-            )?;
-
-            log::info!("New wallpaper composited and set.");
         }
         
         // Safety: as far as I can tell, this function doesn't have any safety

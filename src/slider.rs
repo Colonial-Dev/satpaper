@@ -14,11 +14,18 @@ const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
 const SLIDER_PRODUCT: &str = "geocolor";
 
-pub fn composite_latest_image(config: &Config) -> Result<()> {
-    composite(
-        config,
-        download(config)?
-    )
+pub fn composite_latest_image(config: &Config) -> Result<bool> {
+    download(config)
+        .map(|image| {
+            composite(config, image)
+        })
+        .and_then(std::convert::identity)
+        .map(|_| true)
+        .or_else(|err| {
+            log::error!("Failed to download source image: {err}");
+            log::error!("Composition aborted; waiting until next go round.");
+            Ok(false)
+        })
 }
 
 fn download(config: &Config) -> Result<DynamicImage> {
