@@ -1,0 +1,17 @@
+name: satpaper
+services:
+  backend:
+    build: .
+    environment:
+      - SATPAPER_SATELLITE=goes-east
+      - SATPAPER_RESOLUTION_X=2560
+      - SATPAPER_RESOLUTION_Y=1440
+      - SATPAPER_DISK_SIZE=95
+      - SATPAPER_TARGET_PATH=/satpaper/images
+      - SATPAPER_WALLPAPER_COMMAND=echo "exported"
+
+      # identity theft is not a joke
+      - XDG_CURRENT_DESKTOP=GNOME
+    volumes:
+      - ./src:/code/src
+      - ./images:/satpaper/images
