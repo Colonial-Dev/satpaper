@@ -1,0 +1,11 @@
+name: satpaper
+services:
+  satpaper:
+    image: cyberbit/satpaper
+    environment:
+      - SATPAPER_SATELLITE=goes-east
+      - SATPAPER_RESOLUTION_X=2560
+      - SATPAPER_RESOLUTION_Y=1440
+      - SATPAPER_DISK_SIZE=95
+    volumes:
+      - ./images:/home/rust/images
