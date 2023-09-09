@@ -22,6 +22,8 @@ There are several satellites to choose from, each covering a different region of
 - Meteosat 9 (Africa, Middle East, India, Central Asia)
 - Meteosat 10 (Atlantic Ocean, Africa, Europe)
 
+It's also possible to specify a custom background image, if desired.
+
 ## Warning - Data Usage
 Satpaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the ballpark of twenty megabytes.
 
@@ -90,6 +92,7 @@ systemctl --user start satpaper
 ```
 
 ## Command Line Options
+### Basic/Required
 - `-s`/`--satellite`/`SATPAPER_SATELLITE` - the satellite to source imagery from. 
     - Possible values: `goes-east`, `goes-west`, `himawari`, `meteosat9`, and `meteosat10`.
 - `-x`/`--resolution-x`/`SATPAPER_RESOLUTION_X` (and equivalents for the `y` dimension) - the width/height of the generated wallpaper.
@@ -97,10 +100,16 @@ systemctl --user start satpaper
 - `-d`/`--disk-size`/`SATPAPER_DISK_SIZE` - the size of the "disk" (Earth) relative to the generated wallpaper's smaller dimension.
     - Required to be an integer value in the range `[1, 100]` inclusive, mapping to a percentage value.
     - For most desktop environments, a value in the 90-95 range will give the most detail while preventing parts from being cut off by UI elements like taskbars.
-    - Note that even with a value of 100, there will still be some "buffer"/empty space between the Earth and the image edge. This is because the source image is square with no background transparency.
 - `-t`/`--target-path`/`SATPAPER_TARGET_PATH` - where the generated wallpaper should be saved.
     - Satpaper will output to a file called "satpaper_latest.png" at this path.
     - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/satpaper_latest.png`.
+
+### Advanced
+- `-b`/`--background-image`/`SATPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
+    - Most common image formats are supported.
+    - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.
+    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image,
+      but it's not perfect - some black bordering may remain.
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - Currently, this only works on Unix. The command will be run as `sh -c "{command} file://{image_path}`.

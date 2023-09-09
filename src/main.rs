@@ -103,7 +103,8 @@ mod tests {
             disk_size: 95,
             target_path: ".".into(),
             wallpaper_command: None,
-            once: false
+            once: false,
+            background_image: None
         };
 
         slider::composite_latest_image(&config)?;

@@ -1,3 +1,7 @@
+### v0.5.2
+- Improve handling surrounding network errors (#10)
+- Add `--background-image` feature - overlays the downloaded imagery on top of a custom image.
+
 ### v0.5.1
 - Fix issue where Ubuntu GNOME was not recognized as supported (#7)
 - Fix issue where `--once` flag check was incorrectly timed (after the automatic wallpaper update handling rather than before)

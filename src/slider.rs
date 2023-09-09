@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use image::*;
 use serde::Deserialize;
 use ureq::Agent;
@@ -102,12 +102,17 @@ fn download(config: &Config) -> Result<DynamicImage> {
     Ok(stitched.into())
 }
 
-fn composite(config: &Config, image: DynamicImage) -> Result<()> {
+fn composite(config: &Config, mut image: DynamicImage) -> Result<()> {
     use std::cmp::Ordering::*;
     use image::imageops::FilterType;
 
     log::info!("Compositing...");
 
+    if config.background_image.is_some() {
+        log::info!("Applying transparent background to source image...");
+        cutout_disk(&mut image);
+    }
+    
     let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
         Less => config.resolution_x,
         Equal => config.resolution_x,
@@ -116,7 +121,7 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
 
     let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
     let disk_dim = disk_dim.floor() as u32;
-
+    
     log::info!("Resizing source image...");
 
     let source = imageops::resize(
@@ -128,13 +133,41 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
 
     log::info!("Generating destination image...");
 
-    let mut destination = ImageBuffer::new(
-        config.resolution_x,
-        config.resolution_y
-    );
+    let mut destination;
 
-    for (_, _, pixel) in destination.enumerate_pixels_mut() {
-        *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
+    if let Some(path) = &config.background_image {        
+        let image = std::fs::read(path)
+            .context("Failed to read background image from path {path:?}")?;
+
+        let mut image = image::load_from_memory(&image)
+            .context("Failed to load background image - corrupt or unsupported?")?;
+
+        if image.dimensions().0 != config.resolution_x || 
+           image.dimensions().1 != config.resolution_y 
+        {
+            log::info!("Resizing background image to fit...");
+
+            image = imageops::resize(
+                &image,
+                config.resolution_x,
+                config.resolution_y,
+                FilterType::Lanczos3
+            ).into()
+        }
+
+        destination = image;
+    } 
+    else {
+        let mut default = ImageBuffer::new(
+            config.resolution_x,
+            config.resolution_y
+        );
+    
+        for pixel in default.pixels_mut() {
+            *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
+        }
+
+        destination = default.into();
     }
 
     log::info!("Compositing source into destination...");
@@ -155,6 +188,91 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
     log::info!("Output saved.");
 
     Ok(())
+}
+
+const BLACK: Rgba<u8> = Rgba([0, 0, 0, 255]);
+
+#[derive(Clone, Copy, Debug)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+// Identifies the bounds of the Earth in the image
+fn cutout_disk(image: &mut DynamicImage) {
+    // Find the midpoint and max of the edges.
+    let x_max = image.dimensions().0;
+    let y_max = image.dimensions().1;
+    let x_center = x_max / 2;
+    let y_center = y_max / 2;
+
+    let step = |x: &mut u32, y: &mut u32, direction: Direction| {
+        use Direction::*;
+
+        match direction {
+            Up => y.saturating_add(1),
+            Down => y.saturating_sub(1),
+            Left => x.saturating_sub(1),
+            Right => x.saturating_add(1),
+        }
+    };
+
+    // Step linearly through the image pixels until we encounter a non-black pixel,
+    // returning its coordinates.
+    let march = |mut x: u32, mut y: u32, direction: Direction| -> (u32, u32) {        
+        log::debug!("Performing cutout march for direction {direction:?}...");
+
+        loop {
+            if x >= x_max || y >= y_max {
+                log::debug!("Found disk bounds (max) at {x}, {y}.");
+                return (x, y);
+            }
+
+            if image.get_pixel(x, y) != BLACK {
+                log::debug!("Found disk bounds at {x}, {y}.");
+                return (x, y)
+            };
+
+            step(&mut x, &mut y, direction);
+        }
+    };
+
+    let disk_bottom = march(x_center, y_max, Direction::Up);
+    let disk_top = march(x_center, 0, Direction::Down);
+    let disk_left = march(0, y_center, Direction::Right);
+    let disk_right = march(x_max, y_center, Direction::Left);
+
+    // Approximate the centroid and radius of the circle.
+    let radius = (disk_right.0 - disk_left.0) + (disk_bottom.1 - disk_top.1);
+    let radius = radius / 4;
+
+    let x_center = (disk_bottom.0 + disk_top.0 + disk_left.0 + disk_right.0) / 4;
+    let y_center = (disk_bottom.1 + disk_top.1 + disk_left.1 + disk_right.1) / 4;
+
+    log::debug!("Starting cutout process...");
+
+    // HOLD ONTO YO CPU CORES
+    image
+        .as_mut_rgba8()
+        .unwrap()
+        .enumerate_pixels_mut()
+        .filter(|(x, y, _)| {
+            // Compute the distance between the pixel and the circle's center.
+            // If it's greater than the radius, it's outside the circle.
+            let x_component = (x - x_center).pow(2);
+            let y_component = (y - y_center).pow(2);
+
+            let root = (x_component + y_component) as f32;
+            let root = root.sqrt().floor() as u32;
+
+            root > radius
+        })
+        .for_each(|(_, _, pixel)| {
+            // Make the pixel transparent.
+            pixel.0 = [0; 4];
+        });
 }
 
 pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {

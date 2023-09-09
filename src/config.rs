@@ -54,6 +54,12 @@ pub struct Config {
     /// This is ideal if you want to use Satpaper as a simple wallpaper generator or as part of a larger script/program.
     #[arg(short, long, env = "SATPAPER_ONCE", default_value_t = false)]
     pub once: bool,
+    /// A background image to use instead of the default pure black.
+    /// 
+    /// For best results, the image should match the specified resolution, 
+    /// but Satpaper will resize the image to fit if need be.
+    #[arg(short, long, env = "SATPAPER_BACKGROUND_IMAGE")]
+    pub background_image: Option<PathBuf>,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
