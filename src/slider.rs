@@ -102,16 +102,11 @@ fn download(config: &Config) -> Result<DynamicImage> {
     Ok(stitched.into())
 }
 
-fn composite(config: &Config, mut image: DynamicImage) -> Result<()> {
+fn composite(config: &Config, image: DynamicImage) -> Result<()> {
     use std::cmp::Ordering::*;
     use image::imageops::FilterType;
 
     log::info!("Compositing...");
-
-    if config.background_image.is_some() {
-        log::info!("Applying transparent background to source image...");
-        cutout_disk(&mut image);
-    }
     
     let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
         Less => config.resolution_x,
@@ -124,12 +119,12 @@ fn composite(config: &Config, mut image: DynamicImage) -> Result<()> {
     
     log::info!("Resizing source image...");
 
-    let source = imageops::resize(
+    let mut source = imageops::resize(
         &image,
         disk_dim,
         disk_dim,
         FilterType::Lanczos3
-    );
+    ).into();
 
     log::info!("Generating destination image...");
 
@@ -152,8 +147,12 @@ fn composite(config: &Config, mut image: DynamicImage) -> Result<()> {
                 config.resolution_x,
                 config.resolution_y,
                 FilterType::Lanczos3
-            ).into()
+            ).into();
         }
+
+        log::info!("Applying transparent background to source image...");
+            
+        cutout_disk(&mut source);
 
         destination = image;
     } 
@@ -244,12 +243,16 @@ fn cutout_disk(image: &mut DynamicImage) {
     let disk_left = march(0, y_center, Direction::Right);
     let disk_right = march(x_max, y_center, Direction::Left);
 
+    log::debug!("B {disk_bottom:?} T {disk_top:?} L {disk_left:?} R {disk_right:?}");
+
     // Approximate the centroid and radius of the circle.
     let radius = (disk_right.0 - disk_left.0) + (disk_bottom.1 - disk_top.1);
     let radius = radius / 4;
 
     let x_center = (disk_bottom.0 + disk_top.0 + disk_left.0 + disk_right.0) / 4;
     let y_center = (disk_bottom.1 + disk_top.1 + disk_left.1 + disk_right.1) / 4;
+
+    log::debug!("Radius: {radius} Center X: {x_center} Center Y: {y_center}");
 
     log::debug!("Starting cutout process...");
 
@@ -264,8 +267,13 @@ fn cutout_disk(image: &mut DynamicImage) {
             let x_component = (x - x_center).pow(2);
             let y_component = (y - y_center).pow(2);
 
+            log::debug!("Finding distance from circle center for pixel at {x}, {y}...");
+            log::debug!("X component: {x_component} Y component: {y_component}");
+
             let root = (x_component + y_component) as f32;
             let root = root.sqrt().floor() as u32;
+            
+            log::debug!("Pixel at {x}, {y} is {root} away from circle center.");
 
             root > radius
         })
