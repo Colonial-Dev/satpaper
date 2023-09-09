@@ -20,3 +20,12 @@ jobs:
       run: cargo build
     - name: Run tests
       run: cargo test --release
+  
+  build-docker:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build and test for Docker
+      run: docker build -f docker/Dockerfile --target test .
