@@ -1,0 +1,13 @@
+name: satpaper
+services:
+  satpaper:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    environment:
+      - SATPAPER_SATELLITE=goes-east
+      - SATPAPER_RESOLUTION_X=2560
+      - SATPAPER_RESOLUTION_Y=1440
+      - SATPAPER_DISK_SIZE=95
+    volumes:
+      - ../images:/home/rust/images
