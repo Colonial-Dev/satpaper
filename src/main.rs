@@ -36,7 +36,7 @@ fn update_wallpaper() -> Result<()> {
     let mut timestamp = None;
     
     loop  {
-        log::info!("Checking timestamp...");
+        log::debug!("Checking timestamp...");
 
         let new = slider::fetch_latest_timestamp(&config)
             .unwrap_or_else(|err| {
