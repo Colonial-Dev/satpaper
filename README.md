@@ -108,8 +108,8 @@ systemctl --user start satpaper
 - `-b`/`--background-image`/`SATPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
     - Most common image formats are supported.
     - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.
-    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image,
-      but it's not perfect - some black bordering may remain.
+    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering may remain.
+    - An alternate flood-fill-based algorithm is available, and can be enabled by setting the environment variable `SATPAPER_ENABLE_FLOOD_FILL`. Flood filling is less CPU intensive and may give better results - the catch is that the fill may "eat into" the Earth at night. Consider this feature "experimental" and use at your own risk!
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - Currently, this only works on Unix. The command will be run as `sh -c "{command} file://{image_path}`.

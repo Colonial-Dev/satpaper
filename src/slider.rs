@@ -153,7 +153,10 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
 
         log::info!("Applying transparent background to source image...");
 
-        cutout_disk(&mut source);
+        match std::env::var("SATPAPER_ENABLE_FLOOD_FILL").is_ok() {
+            false => cutout_disk_march(&mut source),
+            true => cutout_disk_flood(&mut source)
+        }
             
         destination = image;
     } 
@@ -190,7 +193,8 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
     Ok(())
 }
 
-const BLACK: Rgba<u8> = Rgba([0, 0, 0, 255]);
+const BLACK: Rgba<u8> = Rgba([4, 4, 4, 255]);
+const CLEAR: Rgba<u8> = Rgba([0; 4]);
 
 #[derive(Clone, Copy, Debug)]
 enum Direction {
@@ -200,8 +204,72 @@ enum Direction {
     Right
 }
 
+fn cutout_disk_flood(image: &mut DynamicImage) {
+    use std::collections::VecDeque;
+
+    let x_max = image.dimensions().0 - 1;
+    let y_max = image.dimensions().1 - 1;
+
+    let step = |mut x: u32, mut y: u32, direction: Direction| {
+        use Direction::*;
+
+        match direction {
+            Up => y = y.saturating_add(1),
+            Down => y = y.saturating_sub(1),
+            Left => x = x.saturating_sub(1),
+            Right => x = x.saturating_add(1),
+        };
+
+        (x, y)
+    };
+
+    let mut flood_fill = |x: u32, y: u32| {
+        use Direction::*;
+
+        let mut queue = VecDeque::new();
+
+        queue.push_back((x, y));
+
+        while !queue.is_empty() {
+            let (x, y) = queue
+                .pop_front()
+                .expect("Queue should not be empty");
+            
+            if x > x_max ||
+               y > y_max
+            {
+                continue;
+            }
+
+            let pixel = image.get_pixel(x, y);
+
+            // It turns out that some pixels in the "black" background are actually [1, 1, 1, 255]!
+            // Why? Who knows.
+            if pixel.0 <= BLACK.0 && pixel != CLEAR {
+                image.put_pixel(x, y, CLEAR);
+
+                queue.push_back(step(x, y, Up));
+                queue.push_back(step(x, y, Down));
+                queue.push_back(step(x, y, Left));
+                queue.push_back(step(x, y, Right));
+            }
+        }
+    };
+
+    // These might seem redundant, but it's necessary to handle differences in the
+    // satellite imagery - GOES has no space between the Earth and image edge on the left and right,
+    // while the rest do.
+    //
+    // This handles the "edge case" of GOES's separated corners, while not doing any extra work
+    // for the likes of Himawari (because the first fill will get all the pixels, causing the rest to finish immediately.)
+    flood_fill(0, 0);
+    flood_fill(x_max, 0);
+    flood_fill(0, y_max);
+    flood_fill(x_max, y_max);
+}
+
 // Identifies the bounds of the Earth in the image
-fn cutout_disk(image: &mut DynamicImage) {
+fn cutout_disk_march(image: &mut DynamicImage) {
     // Find the midpoint and max of the edges.
     let x_max = image.dimensions().0;
     let y_max = image.dimensions().1;
@@ -230,7 +298,7 @@ fn cutout_disk(image: &mut DynamicImage) {
                 return (x, y);
             }
 
-            if image.get_pixel(x, y) != BLACK {
+            if image.get_pixel(x, y).0 <= [1, 1, 1, 255] {
                 log::debug!("Found disk bounds at {x}, {y}.");
                 return (x, y)
             };
@@ -280,7 +348,7 @@ fn cutout_disk(image: &mut DynamicImage) {
         })
         .for_each(|(_, _, pixel)| {
             // Make the pixel transparent.
-            pixel.0 = [0; 4];
+            *pixel = CLEAR;
         });
 }
 
