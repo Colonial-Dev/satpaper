@@ -91,6 +91,10 @@ systemctl --user enable satpaper
 systemctl --user start satpaper
 ```
 
+### Using Docker
+
+Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker image can be found in the `docker/` directory. 
+
 ## Command Line Options
 ### Basic/Required
 - `-s`/`--satellite`/`SATPAPER_SATELLITE` - the satellite to source imagery from. 
