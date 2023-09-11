@@ -131,10 +131,11 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
     let mut destination;
 
     if let Some(path) = &config.background_image {        
-        let image = std::fs::read(path)
-            .context("Failed to read background image from path {path:?}")?;
+        use image::io::Reader;
 
-        let mut image = image::load_from_memory(&image)
+        let mut image = Reader::open(path)
+            .context("Failed to open background image at path {path:?}")?
+            .decode()
             .context("Failed to load background image - corrupt or unsupported?")?;
 
         if image.dimensions().0 != config.resolution_x || 
@@ -151,9 +152,9 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
         }
 
         log::info!("Applying transparent background to source image...");
-            
-        cutout_disk(&mut source);
 
+        cutout_disk(&mut source);
+            
         destination = image;
     } 
     else {

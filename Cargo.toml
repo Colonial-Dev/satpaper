@@ -12,7 +12,8 @@ license = "MIT OR Apache-2.0"
 [profile.release]
 lto = "fat"
 codegen-units = 1
-strip = true
+# strip = true
+debug = 1
 
 [dependencies]
 # Runtime
@@ -20,10 +21,6 @@ anyhow = "1.0.75"
 log = "0.4.20"
 env_logger = "0.10.0"
 clap = { version = "4.4.2", features = ["derive", "env"] }
-
-# Custom allocator
-mimalloc = { version = "0.1.38", default-features = false }
-libmimalloc-sys = { version = "0.1.34", features = ["extended"] }
 
 # Compositing
 image = "0.24.7"
