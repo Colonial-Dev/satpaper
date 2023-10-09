@@ -766,7 +766,7 @@ checksum = "1ad4cc8da4ef723ed60bced201181d83791ad433213d8c24efffda1eec85d741"
 
 [[package]]
 name = "satpaper"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "clap",

@@ -112,7 +112,7 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
 - `-b`/`--background-image`/`SATPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
     - Most common image formats are supported.
     - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.
-    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering may remain.
+    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - Currently, this only works on Unix. The command will be run as `sh -c "{command} file://{image_path}`.
