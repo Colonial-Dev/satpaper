@@ -131,29 +131,33 @@ fn set_mac(path: &str) -> Result<()> {
 }
 
 fn set_kde(path: &str) -> Result<()> {
-    // From https://superuser.com/questions/488232
+    // the path has to be absolute to be set in the script
+    let path = std::fs::canonicalize(path)?;
+    let path = path.to_str().context("Failed to canonicalize the path")?;
+
+    // adapted from https://superuser.com/questions/488232
     Command::new("qdbus")
         .args([
             "org.kde.plasmashell",
             "/PlasmaShell",
             "org.kde.PlasmaShell.evaluateScript",
             &format!(
-                r#"'
+                r#"
                 var allDesktops = desktops();
-                print (allDesktops);
                 for (i=0;i<allDesktops.length;i++) {{
                     d = allDesktops[i];
                     d.wallpaperPlugin = "org.kde.image";
                     d.currentConfigGroup = Array("Wallpaper",
-                                                "org.kde.image",
-                                                "General");
-                    d.writeConfig("Image", "file://{path}")
+                                                 "org.kde.image",
+                                                 "General");
+                    // reset the current wallpaper, otherwise it is not reloaded
+                    d.writeConfig("Image", null);
+                    d.writeConfig("Image", "file://{path}");
                 }}
-        '"#
+                "#
             ),
         ])
-        .output()
+        .status()
         .context("Failed to set wallpaper with qdbus")?;
-
     Ok(())
 }
