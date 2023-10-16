@@ -1,9 +1,11 @@
 use std::io::Read;
+use std::time::Duration;
 
 use anyhow::{Result, Context};
 use image::*;
 use serde::Deserialize;
-use ureq::Agent;
+
+use ureq::AgentBuilder;
 
 use super::{
     Config,
@@ -13,6 +15,8 @@ use super::{
 const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
 const SLIDER_PRODUCT: &str = "geocolor";
+
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn composite_latest_image(config: &Config) -> Result<bool> {
     download(config)
@@ -30,7 +34,9 @@ fn download(config: &Config) -> Result<DynamicImage> {
     let tile_count = config.satellite.tile_count();
     let tile_size = config.satellite.tile_size();
 
-    let agent = Agent::new();
+    let agent = AgentBuilder::new()
+        .timeout(TIMEOUT)
+        .build();
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
@@ -300,6 +306,7 @@ impl Time {
         );
         
         let json = ureq::get(&url)
+            .timeout(TIMEOUT)
             .call()?
             .into_string()?;
 
@@ -333,6 +340,7 @@ impl Date {
         );
 
         let json = ureq::get(&url)
+            .timeout(TIMEOUT)
             .call()?
             .into_string()?;
 
