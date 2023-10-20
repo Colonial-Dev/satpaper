@@ -115,7 +115,7 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
     - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
-    - Currently, this only works on Unix. The command will be run as `sh -c "{command} file://{image_path}`.
+    - The command will be run as `sh -c "{command} file://{image_path}"`.
 - `-o`/`--once`/`SATPAPER_ONCE` - whether or not to only run once.
     - By default, Satpaper is designed to run as a daemon - it stays resident once launched and periodically attempts to update your wallpaper.
     - With `--once` set, Satpaper will generate one wallpaper and terminate, without altering your existing wallpaper.

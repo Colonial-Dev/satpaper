@@ -37,10 +37,9 @@ pub struct Config {
     /// Satpaper will output to a file called "satpaper_latest.png" at this path.
     #[arg(short, long, env = "SATPAPER_TARGET_PATH")]
     pub target_path: PathBuf,
-    /// Command to run to change the wallpaper.
-    ///
-    /// If left empty, it will default to the proper commands for GNOME and KDE.
-    /// The command will be ran as `bash -c "{wallpaper_command} {image_path}"`
+    /// Command to run to change the wallpaper. This overrides automatic update handling.
+    /// 
+    /// The command will be ran as `sh -c "{wallpaper_command} file://{path}"`. 
     #[arg(short, long, env = "SATPAPER_WALLPAPER_COMMAND")]
     pub wallpaper_command: Option<String>,
     /// Whether or not to only run once.

@@ -16,18 +16,19 @@ pub fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
 
     match os {
         "linux" => {
+            if let Some(command) = user_command {
+                return set_userdefined(path, command);
+            }
+
             let desktop = env::var("XDG_CURRENT_DESKTOP")
                 .context("Failed to get XDG_CURRENT_DESKTOP environment variable")?;
 
-            match user_command {
-                Some(command) => set_userdefined(path, command)?,
-                None => match desktop.as_str() {
-                    // https://github.com/Colonial-Dev/satpaper/issues/7
-                    // Ubuntu don't be special for no reason challenge (impossible)
-                    "GNOME" | "ubuntu:GNOME" => set_gnome(path)?,
-                    "KDE" => set_kde(path)?,
-                    _ => panic!("Desktop {desktop} is not supported."),
-                },
+            match desktop.as_str() {
+                // https://github.com/Colonial-Dev/satpaper/issues/7
+                // Ubuntu don't be special for no reason challenge (impossible)
+                "GNOME" | "ubuntu:GNOME" => set_gnome(path)?,
+                "KDE" => set_kde(path)?,
+                _ => panic!("Desktop {desktop} is not supported."),
             }
         }
         "windows" => {
@@ -43,8 +44,18 @@ pub fn set(path: impl AsRef<Path>, user_command: Option<&str>) -> Result<()> {
 }
 
 fn set_userdefined(path: &str, command: &str) -> Result<()> {
-    Command::new("sh")
-        .args(["-c", &format!("{command} file://{path}")])
+    #[cfg(target_family = "windows")]
+    const SH_NAME: &str = "cmd";
+    #[cfg(target_family = "windows")]
+    const SH_ARG: &str = "/C";
+    #[cfg(target_family = "unix")]
+    const SH_NAME: &str = "sh";
+    #[cfg(target_family = "unix")]
+    const SH_ARG: &str = "-c";
+    
+    Command::new(SH_NAME)
+        .arg(SH_ARG)
+        .arg(format!("{command} file://{path}"))
         .output()
         .context("Failed to update wallpaper with custom command")?;
 
