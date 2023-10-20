@@ -75,6 +75,8 @@ Environment=SATPAPER_RESOLUTION_X=2560
 Environment=SATPAPER_RESOLUTION_Y=1440
 Environment=SATPAPER_DISK_SIZE=94
 Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
+# if $XDG_CURRENT_DESKTOP is not defined
+Environment=XDG_CURRENT_DESKTOP=i3
 
 ExecStart=/var/home/colonial/.cargo/bin/satpaper
 Restart=on-failure
