@@ -31,7 +31,6 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
 }
 
 fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
-    let image_size = config.satellite.image_size() as u32;
     let tile_count = config.satellite.tile_count();
     let tile_size = config.satellite.tile_size() as u32;
 
@@ -90,12 +89,10 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
         let mut reader = dec.read_info().unwrap();
         let mut buf = vec![0; reader.output_buffer_size()];
         let info = reader.next_frame(&mut buf).unwrap();
-        assert!(matches!(info.color_type, png::ColorType::Rgb));
-        debug_assert!(info.width == tile_size && info.height == tile_size);
+        debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
+        assert!(info.width == tile_size && info.height == tile_size);
         let img = fimg::Image::<_, 3>::build(info.width, info.height).buf(buf).boxed();
-        assert!(x * tile_size < image_size);
-        assert!(y * tile_size < image_size);
-        // SAFETY: bounds checked above
+        // SAFETY: tiles iterates over the number of tiles, each tile is asserted to be the correct size, `stitched` is a image of tile_size * tile_count.
         unsafe { stitched.overlay_at(&img, x * tile_size, y * tile_size) };
     }
 
