@@ -11,21 +11,27 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install nightly toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
     - name: Build
       run: cargo build
     - name: Run tests
       run: cargo test --release
   
   build-docker:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install nightly toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
     - name: Build and test for Docker
       run: docker build -f docker/Dockerfile --target test .
