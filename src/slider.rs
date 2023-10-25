@@ -82,7 +82,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
     
     log::info!("Stitching tiles...");
 
-    let mut stitched: Image<_, 3> = fimg::Image::alloc(image_size, image_size).boxed();
+    let mut stitched: Image<_, 3> = config.satellite.image();
 
     for result in tiles {
         let (y, x, tile) = result?;

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
+use fimg::Image;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -94,6 +95,16 @@ impl Satellite {
 
     pub fn image_size(&self) -> usize {
         self.tile_count() * self.tile_size()
+    }
+
+    pub fn image(&self) -> Image<Box<[u8]>, 3> {
+        use Satellite::*;
+
+        match self {
+            GOESEast | GOESWest => fimg::make!(3 channels 10848 x 10848).boxed(),
+            Himawari => fimg::make!(3 channels 11008 x 11008).boxed(),
+            Meteosat9 | Meteosat10 => fimg::make!(3 channels 3712 x 3712).boxed(),
+        }
     }
 
     pub fn tile_count(&self) -> usize {
