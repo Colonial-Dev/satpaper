@@ -93,12 +93,7 @@ impl Satellite {
     }
 
     pub fn image_size(&self) -> usize {
-        use Satellite::*;
-
-        match self {
-            GOESEast | GOESWest | Himawari => 10_848,
-            Meteosat9 | Meteosat10 => 3_712,
-        }
+        self.tile_count() * self.tile_size()
     }
 
     pub fn tile_count(&self) -> usize {
@@ -114,7 +109,8 @@ impl Satellite {
         use Satellite::*;
 
         match self {
-            GOESEast | GOESWest | Himawari => 678,
+            GOESEast | GOESWest => 678,
+            Himawari => 688,
             Meteosat9 | Meteosat10 => 464,
         }
     }

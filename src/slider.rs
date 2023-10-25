@@ -2,6 +2,7 @@ use std::io::Read;
 use std::time::Duration;
 
 use anyhow::{Result, Context};
+use fimg::{OverlayAt, Image};
 use image::*;
 use serde::Deserialize;
 
@@ -29,10 +30,10 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
         })
 }
 
-fn download(config: &Config) -> Result<DynamicImage> {
+fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
     let image_size = config.satellite.image_size() as u32;
     let tile_count = config.satellite.tile_count();
-    let tile_size = config.satellite.tile_size();
+    let tile_size = config.satellite.tile_size() as u32;
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
@@ -41,15 +42,10 @@ fn download(config: &Config) -> Result<DynamicImage> {
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
 
-    let mut stitched = RgbaImage::new(
-        image_size,
-        image_size
-    );
-
     let tiles = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
-                .map(move |y| (x, y))
+                .map(move |y| (x as u32, y as u32))
         })
         .map(|(x, y)| -> Result<_> {
             let url = format!(
@@ -86,26 +82,27 @@ fn download(config: &Config) -> Result<DynamicImage> {
     
     log::info!("Stitching tiles...");
 
+    let mut stitched: Image<_, 3> = fimg::Image::alloc(image_size, image_size).boxed();
+
     for result in tiles {
-        let (x, y, tile) = result?;
-
-        let tile = image::load_from_memory_with_format(
-            tile.as_bytes(),
-            ImageFormat::Png
-        )?;
-
-        imageops::overlay(
-            &mut stitched,
-            &tile,
-            (y * tile_size) as i64,
-            (x * tile_size) as i64
-        );
+        let (y, x, tile) = result?;
+        let dec = png::Decoder::new(&*tile);
+        let mut reader = dec.read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        assert!(matches!(info.color_type, png::ColorType::Rgb));
+        debug_assert!(info.width == tile_size && info.height == tile_size);
+        let img = fimg::Image::<_, 3>::build(info.width, info.height).buf(buf).boxed();
+        assert!(x * tile_size < image_size);
+        assert!(y * tile_size < image_size);
+        // SAFETY: bounds checked above
+        unsafe { stitched.overlay_at(&img, x * tile_size, y * tile_size) };
     }
 
-    Ok(stitched.into())
+    Ok(stitched)
 }
 
-fn composite(config: &Config, image: DynamicImage) -> Result<()> {
+fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
     use std::cmp::Ordering::*;
     use image::imageops::FilterType;
 
@@ -122,12 +119,22 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
     
     log::info!("Resizing source image...");
 
-    let mut source = imageops::resize(
-        &image,
-        disk_dim,
-        disk_dim,
-        FilterType::Lanczos3
-    ).into();
+    let mut source = fr::Image::new(
+        disk_dim.try_into().unwrap(),
+        disk_dim.try_into().unwrap(),
+        fr::PixelType::U8x3
+    );
+
+    fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3))
+        .resize(&fr::Image::from_vec_u8(
+            // width and height are internally stored as NonZeroU32 anyway
+            image.width().try_into().unwrap(),
+            image.height().try_into().unwrap(),
+            image.take_buffer().into_vec(),
+            fr::PixelType::U8x3
+        ).unwrap().view(), &mut source.view_mut()).unwrap();
+    
+    let mut source = fimg::Image::build(source.width().get(), source.height().get()).buf(source.into_vec()).boxed();
 
     log::info!("Generating destination image...");
 
@@ -146,6 +153,7 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
         {
             log::info!("Resizing background image to fit...");
 
+            // why is this not cached?
             image = imageops::resize(
                 &image,
                 config.resolution_x,
@@ -157,44 +165,35 @@ fn composite(config: &Config, image: DynamicImage) -> Result<()> {
         log::info!("Applying transparent background to source image...");
 
         cutout_disk(&mut source);
-            
-        destination = image;
-    } 
-    else {
-        let mut default = ImageBuffer::new(
-            config.resolution_x,
-            config.resolution_y
-        );
-    
-        for pixel in default.pixels_mut() {
-            *pixel = Rgba([u8::MIN, u8::MIN, u8::MIN, u8::MAX])
-        }
 
-        destination = default.into();
+        let image = image.into_rgb8();
+            
+        destination = fimg::Image::build(image.width(), image.height()).buf(image.into_vec()).boxed();
+    } else {
+        destination = Image::alloc(config.resolution_x, config.resolution_y).boxed();
     }
 
     log::info!("Compositing source into destination...");
 
-    imageops::overlay(
-        &mut destination,
+    unsafe { destination.overlay_at(
         &source,
-        ((config.resolution_x - disk_dim) / 2) as i64,
-        ((config.resolution_y - disk_dim) / 2) as i64
-    );
+        ((config.resolution_x - disk_dim) / 2) as u32,
+        ((config.resolution_y - disk_dim) / 2) as u32,
+    ) };
 
     log::info!("Compositing complete.");
 
     destination.save(
         config.target_path.join(OUTPUT_NAME)
-    )?;
+    );
 
     log::info!("Output saved.");
 
     Ok(())
 }
 
-const CLEAR: Rgba<u8> = Rgba([0; 4]);
-const BLACK: Rgba<u8> = Rgba([4, 4, 4, 255]);
+const CLEAR: [u8; 3] = [0; 3];
+const BLACK: [u8; 3] = [4; 3];
 
 #[derive(Clone, Copy, Debug)]
 enum Direction {
@@ -205,10 +204,10 @@ enum Direction {
 }
 
 // Identifies the bounds of the Earth in the image
-fn cutout_disk(image: &mut DynamicImage) {
+fn cutout_disk(image: &mut Image<Box<[u8]>, 3>) {
     // Find the midpoint and max of the edges.
-    let x_max = image.dimensions().0 - 1;
-    let y_max = image.dimensions().1 - 1;
+    let x_max = image.width() - 1;
+    let y_max = image.height() - 1;
     let x_center = x_max / 2;
     let y_center = y_max / 2;
 
@@ -229,7 +228,10 @@ fn cutout_disk(image: &mut DynamicImage) {
         log::debug!("Performing cutout march for direction {direction:?}...");
 
         loop {
-            if image.get_pixel(x, y).0 > BLACK.0 {
+            assert!(x < image.width());
+            assert!(y < image.height());
+            // SAFETY: bounds are checked ^
+            if unsafe { image.pixel(x, y) } > BLACK {
                 log::debug!("Found disk bounds at {x}, {y}.");
                 break (x, y)
             };
@@ -267,25 +269,25 @@ fn cutout_disk(image: &mut DynamicImage) {
     log::debug!("Starting cutout process...");
 
     // HOLD ONTO YO CPU CORES
-    image
-        .as_mut_rgba8()
-        .unwrap()
-        .enumerate_pixels_mut()
-        .filter(|(x, y, _)| {
-            // Compute the distance between the pixel and the circle's center.
-            // If it's greater than the radius, it's outside the circle.
+    for x in 0..image.width() {
+        for y in 0..image.height() {
             let x_component = (x - x_center).pow(2);
             let y_component = (y - y_center).pow(2);
 
             let root = (x_component + y_component) as f32;
             let root = root.sqrt().floor() as u32;
             
-            root > radius
-        })
-        .for_each(|(_, _, pixel)| {
-            // Make the pixel transparent.
-            *pixel = CLEAR;
-        });
+            if root < radius {
+                continue;
+            }
+
+            // these checks get optimized out
+            assert!(x < image.width());
+            assert!(y < image.height());
+            // SAFETY: literally iterating over bounds (also there are checks)
+            unsafe { image.set_pixel(x, y, CLEAR) };
+        }
+    }
 }
 
 pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {

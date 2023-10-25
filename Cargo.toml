@@ -23,6 +23,9 @@ clap = { version = "4.4.2", features = ["derive", "env"] }
 
 # Compositing
 image = "0.24.7"
+fimg = "0.4.16"
+png = "0.17.10"
+fr = { version = "2.7.3", package = "fast_image_resize" }
 
 # Scraping
 ureq = "2.7.1"
