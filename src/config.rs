@@ -84,7 +84,7 @@ impl Satellite {
         }
     }
 
-    pub fn max_zoom(self) -> usize {
+    pub fn max_zoom(self) -> u32 {
         use Satellite::*;
 
         match self {
@@ -94,26 +94,14 @@ impl Satellite {
     }
 
     pub fn image(self) -> Image<Box<[u8]>, 3> {
-        use Satellite::*;
-
-        match self {
-            GOESEast | GOESWest => fimg::make!(3 channels 10848 x 10848).boxed(),
-            Himawari => fimg::make!(3 channels 11008 x 11008).boxed(),
-            Meteosat9 | Meteosat10 => fimg::make!(3 channels 3712 x 3712).boxed(),
-        }
+        Image::alloc(self.tile_count() * self.tile_size(), self.tile_count() * self.tile_size()).boxed()
     }
 
     pub fn tile_image(self) -> Image<Box<[u8]>, 3> {
-        use Satellite::*;
-
-        match self {
-            GOESEast | GOESWest => fimg::make!(3 channels 678 x 678).boxed(),
-            Himawari => fimg::make!(3 channels 688 x 688).boxed(),
-            Meteosat9 | Meteosat10 => fimg::make!(3 channels 464 x 464).boxed(),
-        }
+        Image::alloc(self.tile_size(), self.tile_size()).boxed()
     }
 
-    pub fn tile_count(self) -> usize {
+    pub fn tile_count(self) -> u32 {
         use Satellite::*;
 
         match self {
@@ -122,7 +110,7 @@ impl Satellite {
         }
     }
 
-    pub fn tile_size(self) -> usize {
+    pub fn tile_size(self) -> u32 {
         use Satellite::*;
 
         match self {

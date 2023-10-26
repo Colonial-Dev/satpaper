@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, cell::SyncUnsafeCell};
 use std::time::Duration;
 
 use anyhow::{Result, Context};
@@ -17,7 +17,7 @@ const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
 const SLIDER_PRODUCT: &str = "geocolor";
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub fn composite_latest_image(config: &Config) -> Result<bool> {
     download(config)
@@ -31,7 +31,7 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
 
 fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
     let tile_count = config.satellite.tile_count();
-    let tile_size = config.satellite.tile_size() as u32;
+    let tile_size = config.satellite.tile_size();
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
@@ -40,11 +40,11 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
-    let mut buf = [0u8; 4 << 20];
+    static BUF: SyncUnsafeCell<[u8; 4 << 20]> = SyncUnsafeCell::new([0; 4 << 20]);
     let tiles = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
-                .map(move |y| (x as u32, y as u32))
+                .map(move |y| (x, y))
         })
         .map(|(x, y)| -> Result<_> {
             // year:04 i am hilarious
@@ -64,6 +64,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
             let len: usize = resp.header("Content-Length")
                 .expect("Response header should have Content-Length")
                 .parse()?;
+            let buf = unsafe { &mut *BUF.get() };
             if buf.len() < len {
                 // this will never occur :ferrisClueless:
                 anyhow::bail!("buffer too small");

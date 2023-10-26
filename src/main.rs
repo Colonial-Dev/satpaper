@@ -1,3 +1,4 @@
+#![feature(sync_unsafe_cell)]
 mod config;
 mod slider;
 mod wallpaper;
