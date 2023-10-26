@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::{Result, Context};
 use fimg::{OverlayAt, Image};
 use image::*;
-use serde::Deserialize;
+use serde::{Deserialize, de};
 
 use ureq::AgentBuilder;
 
@@ -41,15 +41,16 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
-    let mut buf = [0u8; 1048576];
+    let mut buf = [0u8; 4 << 20];
     let tiles = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
                 .map(move |y| (x as u32, y as u32))
         })
         .map(|(x, y)| -> Result<_> {
+            // year:04 i am hilarious
             let url = format!(
-                "{SLIDER_BASE_URL}/data/imagery/{year}/{month}/{day}/{}---{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{}/{:02}/{x:03}_{y:03}.png",
+                "{SLIDER_BASE_URL}/data/imagery/{year:04}/{month:02}/{day:02}/{}---{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{}/{:02}/{x:03}_{y:03}.png",
                 config.satellite.id(),
                 time.as_int(),
                 config.satellite.max_zoom()
@@ -64,15 +65,14 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
             let len: usize = resp.header("Content-Length")
                 .expect("Response header should have Content-Length")
                 .parse()?;
-
+            if buf.len() < len {
+                // this will never occur :ferrisClueless:
+                anyhow::bail!("buffer too small");
+            };
             let mut read = 0;
             let mut reader = resp.into_reader();
-            while read != len {
-                // this will never buffer too small :ferrisClueless:
-                read += reader.read(
-                    &mut buf.get_mut(read..)
-                            .ok_or(anyhow::anyhow!("buffer too small"))?
-                )?;
+            while read < len {
+                read += reader.read(&mut buf[read..])?;
             }
 
             log::debug!(
@@ -86,7 +86,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
             let info = reader.next_frame(&mut unsafe { buf.buffer_mut() })?;
             debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             Ok((x, y, buf))
-        });    
+        });
     
     log::info!("Stitching tiles...");
 
@@ -296,8 +296,30 @@ pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
 #[derive(Debug, Deserialize)]
 struct Time {
     #[serde(rename = "timestamps_int")]
-    timestamps: Vec<u64>
+    #[serde(deserialize_with = "one")]
+    timestamp: u64
 }
+
+fn one<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de> {
+    struct Visit;
+    impl<'de> de::Visitor<'de> for Visit {
+        type Value = u64;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "array of u64")
+        }
+
+        fn visit_seq<S: de::SeqAccess<'de>>(self, mut seq: S) -> Result<Self::Value, S::Error> {    
+            let value = seq.next_element()?.ok_or(de::Error::custom("empty seq"))?;
+            while let Some(_) = seq.next_element::<u64>()? {}
+            Ok(value)
+        }
+    }
+    deserializer.deserialize_seq(Visit {})
+}
+
 
 impl Time {
     pub fn fetch(config: &Config) -> Result<Self> {
@@ -309,28 +331,21 @@ impl Time {
         let json = ureq::get(&url)
             .timeout(TIMEOUT)
             .call()?
-            .into_string()?;
+            .into_reader();
 
-        let mut new: Self = serde_json::from_str(&json)?;
-
-        new.timestamps.drain(1..);
-        new.timestamps.shrink_to_fit();
-
-        Ok(new)
+        Ok(serde_json::from_reader(json)?)
     }
 
     pub fn as_int(&self) -> u64 {
-        *self
-            .timestamps
-            .first()
-            .expect("At least one timestamp should exist")
+        self.timestamp
     }
 }
 
 #[derive(Debug, Deserialize)]
 struct Date {
     #[serde(rename = "dates_int")]
-    dates: Vec<u64>
+    #[serde(deserialize_with = "one")]
+    date: u64
 }
 
 impl Date {
@@ -343,33 +358,24 @@ impl Date {
         let json = ureq::get(&url)
             .timeout(TIMEOUT)
             .call()?
-            .into_string()?;
+            .into_reader();
 
-        let mut new: Self= serde_json::from_str(&json)?;
-
-        new.dates.drain(1..);
-        new.dates.shrink_to_fit();
-
-        Ok(new)
+        Ok(serde_json::from_reader(json)?)
     }
 
-    pub fn as_int(&self) -> u64 {
-        *self
-            .dates
-            .first()
-            .expect("At least one timestamp should exist")
-    }
-
-    pub fn split(&self) -> (String, String, String) {
-        let str = format!(
-            "{}", 
-            self.as_int()
-        );
-
+    /// Splits date into year, month, and day
+    pub fn split(&self) -> (u64, u64, u64) {
+        let dig = |n: u8| (self.date / 10u64.pow(n as u32)) % 10;
         (
-            str[0..=3].to_owned(),
-            str[4..=5].to_owned(),
-            str[6..=7].to_owned()
+            (dig(7) * 1000) + (dig(6) * 100) + (dig(5) * 10) + dig(4), // yyyy
+            (dig(3) * 10) + dig(2), // mm
+            (dig(1) * 10) + dig(0), // dd
         )
     }
+}
+
+#[test]
+fn test_date_split() {
+    assert_eq!(Date { date: 20231026 }.split(), (2023, 10, 26));
+    assert_eq!(Date { date: 20270425 }.split(), (2027, 4, 25));
 }
