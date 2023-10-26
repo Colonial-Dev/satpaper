@@ -1,9 +1,11 @@
-use std::{io::Read, cell::SyncUnsafeCell};
+use std::sync::PoisonError;
+use std::{io::Read, sync::Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, Context};
 use fimg::{OverlayAt, Image};
 use image::*;
+use rayon::prelude::*;
 use serde::{Deserialize, de};
 
 use ureq::AgentBuilder;
@@ -40,12 +42,13 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
-    static BUF: SyncUnsafeCell<[u8; 4 << 20]> = SyncUnsafeCell::new([0; 4 << 20]);
+
     let tiles = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
                 .map(move |y| (x, y))
         })
+        .par_bridge()
         .map(|(x, y)| -> Result<_> {
             // year:04 i am hilarious
             let url = format!(
@@ -55,8 +58,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
                 config.satellite.max_zoom()
             );
 
-            log::debug!("Scraping tile at ({x}, {y}.)");
-
+            log::debug!("Scraping tile at ({x}, {y}).");
             let resp = agent
                 .get(&url)
                 .call()?;
@@ -64,11 +66,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
             let len: usize = resp.header("Content-Length")
                 .expect("Response header should have Content-Length")
                 .parse()?;
-            let buf = unsafe { &mut *BUF.get() };
-            if buf.len() < len {
-                // this will never occur :ferrisClueless:
-                anyhow::bail!("buffer too small");
-            };
+            let mut buf = vec![0; len];
             let mut read = 0;
             let mut reader = resp.into_reader();
             while read < len {
@@ -80,25 +78,29 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
                 len as f32 / 1024.0
             );
 
-            let dec = png::Decoder::new(&buf[..len]);
-            let mut reader = dec.read_info()?;
-            let mut buf = config.satellite.tile_image();
-            let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
-            debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             Ok((x, y, buf))
         });
     
     log::info!("Stitching tiles...");
+    let stitched = Mutex::new(config.satellite.image());
 
-    let mut stitched: Image<_, 3> = config.satellite.image();
-
-    for result in tiles {
-        let (y, x, tile) = result?;
+    tiles.try_for_each(|a|{
+        let (y, x, tile) = a?;
+        log::debug!("Decoding png ({x} {y})");
+        let dec = png::Decoder::new(&*tile);
+        let mut reader = dec.read_info()?;
+        let mut buf = config.satellite.tile_image();
+        let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
+        debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
+        // yes, this is possible lockless.
+        // no, i will not do it.
+        // if you do it, construct a sendable pointer, then exclusively use .add and slice::from_raw_parts(_mut)
         // SAFETY: tiles iterates over the number of tiles, each tile == tile_size, `stitched` is a image of tile_size * tile_count.
-        unsafe { stitched.overlay_at(&tile, x * tile_size, y * tile_size) };
-    }
+        unsafe { stitched.lock().unwrap_or_else(PoisonError::into_inner).overlay_at(&buf, x * tile_size, y * tile_size) };        
+        anyhow::Ok(())
+    })?;
 
-    Ok(stitched)
+    Ok(stitched.into_inner().unwrap())
 }
 
 fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
