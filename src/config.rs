@@ -72,7 +72,7 @@ pub enum Satellite {
 }
 
 impl Satellite {
-    pub fn id(&self) -> &'static str {
+    pub fn id(self) -> &'static str {
         use Satellite::*;
 
         match self {
@@ -84,7 +84,7 @@ impl Satellite {
         }
     }
 
-    pub fn max_zoom(&self) -> usize {
+    pub fn max_zoom(self) -> usize {
         use Satellite::*;
 
         match self {
@@ -93,7 +93,7 @@ impl Satellite {
         }
     }
 
-    pub fn image(&self) -> Image<Box<[u8]>, 3> {
+    pub fn image(self) -> Image<Box<[u8]>, 3> {
         use Satellite::*;
 
         match self {
@@ -103,7 +103,7 @@ impl Satellite {
         }
     }
 
-    pub fn tile_image(&self) -> Image<Box<[u8]>, 3> {
+    pub fn tile_image(self) -> Image<Box<[u8]>, 3> {
         use Satellite::*;
 
         match self {
@@ -113,7 +113,7 @@ impl Satellite {
         }
     }
 
-    pub fn tile_count(&self) -> usize {
+    pub fn tile_count(self) -> usize {
         use Satellite::*;
 
         match self {
@@ -122,7 +122,7 @@ impl Satellite {
         }
     }
 
-    pub fn tile_size(&self) -> usize {
+    pub fn tile_size(self) -> usize {
         use Satellite::*;
 
         match self {

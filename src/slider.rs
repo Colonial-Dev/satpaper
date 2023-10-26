@@ -21,8 +21,7 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn composite_latest_image(config: &Config) -> Result<bool> {
     download(config)
-        .and_then(|image| composite(config, image))
-        .map(|_| true)
+        .and_then(|image| { composite(config, image)?; Ok(true) })
         .or_else(|err| {
             log::error!("Failed to download source image: {err}");
             log::error!("Composition aborted; waiting until next go round.");
@@ -83,7 +82,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
             let dec = png::Decoder::new(&buf[..len]);
             let mut reader = dec.read_info()?;
             let mut buf = config.satellite.tile_image();
-            let info = reader.next_frame(&mut unsafe { buf.buffer_mut() })?;
+            let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
             debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             Ok((x, y, buf))
         });
@@ -102,15 +101,15 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 }
 
 fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
-    use std::cmp::Ordering::*;
+    use std::cmp::Ordering;
     use image::imageops::FilterType;
 
     log::info!("Compositing...");
     
     let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
-        Less => config.resolution_x,
-        Equal => config.resolution_x,
-        Greater => config.resolution_y,
+        Ordering::Less => config.resolution_x,
+        Ordering::Equal => config.resolution_x,
+        Ordering::Greater => config.resolution_y,
     };
 
     let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
@@ -176,8 +175,8 @@ fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
 
     unsafe { destination.overlay_at(
         &source,
-        ((config.resolution_x - disk_dim) / 2) as u32,
-        ((config.resolution_y - disk_dim) / 2) as u32,
+        (config.resolution_x - disk_dim) / 2,
+        (config.resolution_y - disk_dim) / 2,
     ) };
 
     log::info!("Compositing complete.");
@@ -365,7 +364,7 @@ impl Date {
 
     /// Splits date into year, month, and day
     pub fn split(&self) -> (u64, u64, u64) {
-        let dig = |n: u8| (self.date / 10u64.pow(n as u32)) % 10;
+        let dig = |n: u8| (self.date / 10u64.pow(u32::from(n))) % 10;
         (
             (dig(7) * 1000) + (dig(6) * 100) + (dig(5) * 10) + dig(4), // yyyy
             (dig(3) * 10) + dig(2), // mm
@@ -376,6 +375,6 @@ impl Date {
 
 #[test]
 fn test_date_split() {
-    assert_eq!(Date { date: 20231026 }.split(), (2023, 10, 26));
-    assert_eq!(Date { date: 20270425 }.split(), (2027, 4, 25));
+    assert_eq!(Date { date: 2023_10_26 }.split(), (2023, 10, 26));
+    assert_eq!(Date { date: 2027_04_25 }.split(), (2027, 4, 25));
 }
