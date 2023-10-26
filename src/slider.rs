@@ -36,11 +36,12 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
+        .user_agent("satpaper")
         .build();
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
-
+    let mut buf = [0u8; 1048576];
     let tiles = (0..tile_count)
         .flat_map(|x| {
             (0..tile_count)
@@ -64,18 +65,26 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
                 .expect("Response header should have Content-Length")
                 .parse()?;
 
-            let mut buf = Vec::with_capacity(len);
-
-            resp
-                .into_reader()
-                .take(10_000_000)
-                .read_to_end(&mut buf)?;
+            let mut read = 0;
+            let mut reader = resp.into_reader();
+            while read != len {
+                // this will never buffer too small :ferrisClueless:
+                read += reader.read(
+                    &mut buf.get_mut(read..)
+                            .ok_or(anyhow::anyhow!("buffer too small"))?
+                )?;
+            }
 
             log::debug!(
-                "Finished scraping tile at ({x}, {y}). Size: {}mB",
-                len as f32 / 1024.0 / 1024.0
+                "Finished scraping tile at ({x}, {y}). Size: {:.2}KiB",
+                len as f32 / 1024.0
             );
 
+            let dec = png::Decoder::new(&buf[..len]);
+            let mut reader = dec.read_info()?;
+            let mut buf = config.satellite.tile_image();
+            let info = reader.next_frame(&mut unsafe { buf.buffer_mut() })?;
+            debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             Ok((x, y, buf))
         });    
     
@@ -85,15 +94,8 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
 
     for result in tiles {
         let (y, x, tile) = result?;
-        let dec = png::Decoder::new(&*tile);
-        let mut reader = dec.read_info().unwrap();
-        let mut buf = vec![0; reader.output_buffer_size()];
-        let info = reader.next_frame(&mut buf).unwrap();
-        debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
-        assert!(info.width == tile_size && info.height == tile_size);
-        let img = fimg::Image::<_, 3>::build(info.width, info.height).buf(buf).boxed();
-        // SAFETY: tiles iterates over the number of tiles, each tile is asserted to be the correct size, `stitched` is a image of tile_size * tile_count.
-        unsafe { stitched.overlay_at(&img, x * tile_size, y * tile_size) };
+        // SAFETY: tiles iterates over the number of tiles, each tile == tile_size, `stitched` is a image of tile_size * tile_count.
+        unsafe { stitched.overlay_at(&tile, x * tile_size, y * tile_size) };
     }
 
     Ok(stitched)

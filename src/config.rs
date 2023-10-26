@@ -93,10 +93,6 @@ impl Satellite {
         }
     }
 
-    pub fn image_size(&self) -> usize {
-        self.tile_count() * self.tile_size()
-    }
-
     pub fn image(&self) -> Image<Box<[u8]>, 3> {
         use Satellite::*;
 
@@ -104,6 +100,16 @@ impl Satellite {
             GOESEast | GOESWest => fimg::make!(3 channels 10848 x 10848).boxed(),
             Himawari => fimg::make!(3 channels 11008 x 11008).boxed(),
             Meteosat9 | Meteosat10 => fimg::make!(3 channels 3712 x 3712).boxed(),
+        }
+    }
+
+    pub fn tile_image(&self) -> Image<Box<[u8]>, 3> {
+        use Satellite::*;
+
+        match self {
+            GOESEast | GOESWest => fimg::make!(3 channels 678 x 678).boxed(),
+            Himawari => fimg::make!(3 channels 688 x 688).boxed(),
+            Meteosat9 | Meteosat10 => fimg::make!(3 channels 464 x 464).boxed(),
         }
     }
 
