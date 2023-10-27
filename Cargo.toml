@@ -23,7 +23,7 @@ clap = { version = "4.4.2", features = ["derive", "env"] }
 
 # Compositing
 image = { version = "0.24.7", features = ["jpeg", "gif", "png", "pnm", "qoi", "tga", "tiff", "webp", "bmp", "dds", "dxt"], default-features = false }
-fimg = { version = "0.4.17", features = ["save"], default-features = false } # forgot to turn off text default for testing
+fimg = "0.4.19"
 png = "0.17.10"
 fr = { version = "2.7.3", package = "fast_image_resize" }
 

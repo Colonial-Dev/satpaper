@@ -1,10 +1,9 @@
-use std::sync::PoisonError;
+use std::sync::{PoisonError, OnceLock};
 use std::{io::Read, sync::Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, Context};
-use fimg::{OverlayAt, Image};
-use image::*;
+use fimg::{OverlayAt, Image as Img};
 use rayon::prelude::*;
 use serde::{Deserialize, de};
 
@@ -14,6 +13,9 @@ use super::{
     Config,
     OUTPUT_NAME
 };
+
+/// rgb all the way down
+pub type Image<T> = Img<T, 3>;
 
 const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
 const SLIDER_SECTOR: &str = "full_disk";
@@ -31,7 +33,7 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
         })
 }
 
-fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
+fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
     let tile_count = config.satellite.tile_count();
     let tile_size = config.satellite.tile_size();
 
@@ -103,9 +105,28 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>, 3>> {
     Ok(stitched.into_inner().unwrap())
 }
 
-fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
+fn resize(image: Image<Box<[u8]>>, x: u32, y: u32) -> Image<Box<[u8]>> {
+    let mut dst = fr::Image::new(
+        x.try_into().unwrap(),
+        y.try_into().unwrap(),
+        fr::PixelType::U8x3
+    );
+
+    fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3))
+        .resize(&fr::Image::from_vec_u8(
+            // width and height are internally stored as NonZeroU32 anyway
+            image.width().try_into().unwrap(),
+            image.height().try_into().unwrap(),
+            // why this requires mutability i have no idea
+            image.take_buffer().into_vec(),
+            fr::PixelType::U8x3
+        ).unwrap().view(), &mut dst.view_mut()).unwrap();
+    
+    Image::build(dst.width().get(), dst.height().get()).buf(dst.into_vec()).boxed()
+}
+
+fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
     use std::cmp::Ordering;
-    use image::imageops::FilterType;
 
     log::info!("Compositing...");
     
@@ -120,71 +141,43 @@ fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
     
     log::info!("Resizing source image...");
 
-    let mut source = fr::Image::new(
-        disk_dim.try_into().unwrap(),
-        disk_dim.try_into().unwrap(),
-        fr::PixelType::U8x3
-    );
+    let source = resize(image, disk_dim, disk_dim);
 
-    fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3))
-        .resize(&fr::Image::from_vec_u8(
-            // width and height are internally stored as NonZeroU32 anyway
-            image.width().try_into().unwrap(),
-            image.height().try_into().unwrap(),
-            image.take_buffer().into_vec(),
-            fr::PixelType::U8x3
-        ).unwrap().view(), &mut source.view_mut()).unwrap();
-    
-    let mut source = fimg::Image::build(source.width().get(), source.height().get()).buf(source.into_vec()).boxed();
+    let composite = if let Some(path) = &config.background_image {
+        static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
+        let mut bg = BG.get_or_try_init(|| {
+            use image::io::Reader;
 
-    log::info!("Generating destination image...");
+            let image = Reader::open(path)
+                .context("Failed to open background image at path {path:?}")?
+                .decode()
+                .context("Failed to load background image - corrupt or unsupported?")?
+                .into_rgb8();
+            let mut image = Image::build(image.width(), image.height()).buf(image.into_vec().into_boxed_slice());
 
-    let mut destination;
+            if image.width() != config.resolution_x || 
+                image.height() != config.resolution_y {
+                log::info!("Resizing background image to fit...");
 
-    if let Some(path) = &config.background_image {        
-        use image::io::Reader;
+                image = resize(image, config.resolution_x, config.resolution_y);
+            }
 
-        let mut image = Reader::open(path)
-            .context("Failed to open background image at path {path:?}")?
-            .decode()
-            .context("Failed to load background image - corrupt or unsupported?")?;
-
-        if image.dimensions().0 != config.resolution_x || 
-           image.dimensions().1 != config.resolution_y 
-        {
-            log::info!("Resizing background image to fit...");
-
-            // why is this not cached?
-            image = imageops::resize(
-                &image,
-                config.resolution_x,
-                config.resolution_y,
-                FilterType::Lanczos3
-            ).into();
-        }
-
-        log::info!("Applying transparent background to source image...");
-
-        cutout_disk(&mut source);
-
-        let image = image.into_rgb8();
-            
-        destination = fimg::Image::build(image.width(), image.height()).buf(image.into_vec()).boxed();
+            anyhow::Ok(image)
+        })?.clone();
+        log::info!("Compositing source into destination...");
+        cutout_disk(bg.as_mut(), source.as_ref(), (config.resolution_x - disk_dim) / 2, (config.resolution_y - disk_dim) / 2);
+        bg
     } else {
-        destination = Image::alloc(config.resolution_x, config.resolution_y).boxed();
-    }
-
-    log::info!("Compositing source into destination...");
-
-    unsafe { destination.overlay_at(
-        &source,
-        (config.resolution_x - disk_dim) / 2,
-        (config.resolution_y - disk_dim) / 2,
-    ) };
-
+        let mut behind = Image::alloc(config.resolution_x, config.resolution_y).boxed();
+        unsafe { behind.overlay_at(
+            &source,
+            (config.resolution_x - disk_dim) / 2,
+            (config.resolution_y - disk_dim) / 2,
+        ) };
+        behind
+    };
     log::info!("Compositing complete.");
-
-    destination.save(
+    composite.save(
         config.target_path.join(OUTPUT_NAME)
     );
 
@@ -193,31 +186,31 @@ fn composite(config: &Config, image: Image<Box<[u8]>, 3>) -> Result<()> {
     Ok(())
 }
 
-const CLEAR: [u8; 3] = [0; 3];
 const BLACK: [u8; 3] = [4; 3];
 
 #[derive(Clone, Copy, Debug)]
 enum Direction {
-    Up,
-    Down,
     Left,
     Right
 }
 
 // Identifies the bounds of the Earth in the image
-fn cutout_disk(image: &mut Image<Box<[u8]>, 3>) {
+fn cutout_disk(
+    mut bg: Image<&mut [u8]>,
+    earth: Image<&[u8]>,
+    offset_x: u32,
+    offset_y: u32
+) {
     // Find the midpoint and max of the edges.
-    let x_max = image.width() - 1;
-    let y_max = image.height() - 1;
+    let x_max = earth.width() - 1;
+    let y_max = earth.height() - 1;
     let x_center = x_max / 2;
     let y_center = y_max / 2;
 
-    let step = |x: &mut u32, y: &mut u32, direction: Direction| {
+    let step = |x: &mut u32, direction: Direction| {
         use Direction::*;
 
         match direction {
-            Up => *y = y.saturating_sub(1),
-            Down => *y = y.saturating_add(1),
             Left => *x = x.saturating_sub(1),
             Right => *x = x.saturating_add(1),
         }
@@ -225,68 +218,52 @@ fn cutout_disk(image: &mut Image<Box<[u8]>, 3>) {
 
     // Step linearly through the image pixels until we encounter a non-black pixel,
     // returning its coordinates.
-    let march = |mut x: u32, mut y: u32, direction: Direction| -> (u32, u32) {        
+    let march = |mut x: u32, y: u32, direction: Direction| -> u32 {        
         log::debug!("Performing cutout march for direction {direction:?}...");
 
         loop {
-            assert!(x < image.width());
-            assert!(y < image.height());
-            // SAFETY: bounds are checked ^
-            if unsafe { image.pixel(x, y) } > BLACK {
+            // SAFETY: march
+            if unsafe { earth.pixel(x, y) } > BLACK {
                 log::debug!("Found disk bounds at {x}, {y}.");
-                break (x, y)
+                break x
             };
 
-            step(&mut x, &mut y, direction);
+            step(&mut x, direction);
 
-            if y == 0 || x == 0 {
+            if x == 0 {
                 log::debug!("Found disk bounds (min) at {x}, {y}.");
-                break (x, y);
+                break x;
             }
 
-            if x > x_max || y > y_max {
+            if x > x_max {
                 log::debug!("Found disk bounds (max) at {x}, {y}.");
-                break (
-                    x.min(x_max),
-                    y.min(y_max)
-                );
+                break x.min(x_max);
             }
         }
     };
 
-    let disk_bottom = march(x_center, y_max, Direction::Up);
-    let disk_top = march(x_center, 0, Direction::Down);
     let disk_left = march(0, y_center, Direction::Right);
     let disk_right = march(x_max, y_center, Direction::Left);
 
-    log::debug!("B {disk_bottom:?} T {disk_top:?} L {disk_left:?} R {disk_right:?}");
+    log::debug!("L {disk_left:?} R {disk_right:?}");
 
     // Approximate the centroid and radius of the circle.
-    let radius = (disk_right.0 - disk_left.0) + (disk_bottom.1 - disk_top.1);
-    let radius = radius / 4;
+    let radius = (disk_right - disk_left) / 2;
 
     log::debug!("Radius: {radius} Center X: {x_center} Center Y: {y_center}");
 
     log::debug!("Starting cutout process...");
 
-    // HOLD ONTO YO CPU CORES
-    for x in 0..image.width() {
-        for y in 0..image.height() {
-            let x_component = (x - x_center).pow(2);
-            let y_component = (y - y_center).pow(2);
+    let inside = |x: u32| move |y: u32| {
+        ((x_center as i32 - x as i32) * (x_center as i32 - x as i32) + (y_center as i32 - y as i32) * (y_center as i32 - y as i32)).isqrt() < radius as i32
+    };
 
-            let root = (x_component + y_component) as f32;
-            let root = root.sqrt().floor() as u32;
-            
-            if root < radius {
-                continue;
+    for x in 0..earth.width() {
+        for y in 0..earth.height() {
+            if inside(x)(y) {
+                // overlay the earth
+                unsafe { bg.set_pixel(offset_x + x, offset_y + y, earth.pixel(x, y)) };
             }
-
-            // these checks get optimized out
-            assert!(x < image.width());
-            assert!(y < image.height());
-            // SAFETY: literally iterating over bounds (also there are checks)
-            unsafe { image.set_pixel(x, y, CLEAR) };
         }
     }
 }

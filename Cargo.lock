@@ -266,9 +266,9 @@ dependencies = [
 
 [[package]]
 name = "fimg"
-version = "0.4.17"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7390bb630adb95b8b31f7b9ec0d423648dad654a0e4dd39ae912e9eccc3361d0"
+checksum = "e4e6f0d9ed301d84fa7a855c511e47b7e169b4f9462a5d6e8aa908cbbd61cb28"
 dependencies = [
  "mattr",
  "png",
