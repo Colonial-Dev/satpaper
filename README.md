@@ -62,7 +62,8 @@ Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`
 cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch master
 ```
 
-To automatically start Satpaper when you log in, you can use a `systemd` unit or equivalent.
+#### Running as systemd service
+To automatically start Satpaper when you log in, you can use a `systemd` unit.
 
 ```
 [Unit]
@@ -89,6 +90,66 @@ WantedBy=default.target
 nano $HOME/.config/systemd/user/satpaper.service
 systemctl --user enable satpaper
 systemctl --user start satpaper
+```
+
+#### Running as a launchd service (Mac)
+
+```sh
+# (Ensure background folder location exists)
+touch $HOME/.local/share/backgrounds
+# Copy the plist below and place it at $HOME/Library/LaunchAgents/com.satpaper.plist
+# Ensure you change your username (placeholder is $YOUR_USERNAME)
+nano $HOME/Library/LaunchAgents/com.satpaper.plist
+# Launch the launchd service
+launchctl load $HOME/Library/LaunchAgents/com.satpaper.plist
+launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
+```
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.satpaper.rs</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>SATPAPER_SATELLITE</key>
+        <string>goes-east</string>
+        <key>SATPAPER_RESOLUTION_X</key>
+        <string>2560</string>
+        <key>SATPAPER_RESOLUTION_Y</key>
+        <string>1440</string>
+        <key>SATPAPER_DISK_SIZE</key>
+        <string>94</string>
+        <key>SATPAPER_TARGET_PATH</key>
+        <string>/Users/${YOUR_USERNAME}/.local/share/backgrounds/</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/${YOUR_USERNAME}/.cargo/bin/satpaper</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>10</integer>
+    <key>RestartService</key>
+    <dict>
+        <key>FailureAction</key>
+        <string>restart</string>
+        <key>SuccessAction</key>
+        <string>restart</string>
+    </dict>
+    <key>StandardErrorPath</key>
+    <string>/Users/${YOUR_USERNAME}/satpaper.log</string>
+    <key>StandardOutPath</key>
+    <string>/Users/${YOUR_USERNAME}/satpaper.log</string>
+    <key>UserName</key>
+    <string>${YOUR_USERNAME}</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/${YOUR_USERNAME}</string>
+</dict>
+</plist>
 ```
 
 ### Using Docker
