@@ -343,10 +343,10 @@ impl Date {
     }
 
     /// Splits date into year, month, and day
-    pub fn split(&self) -> (u64, u64, u64) {
-        let dig = |n: u8| (self.date / 10u64.pow(u32::from(n))) % 10;
+    pub fn split(&self) -> (u16, u8, u8) {
+        let dig = |n: u8| ((self.date / 10u64.pow(u32::from(n))) % 10) as u8;
         (
-            (dig(7) * 1000) + (dig(6) * 100) + (dig(5) * 10) + dig(4), // yyyy
+            (u16::from(dig(7)) * 1000) + (u16::from(dig(6)) * 100) + (u16::from(dig(5)) * 10) + u16::from(dig(4)), // yyyy
             (dig(3) * 10) + dig(2), // mm
             (dig(1) * 10) + dig(0), // dd
         )
