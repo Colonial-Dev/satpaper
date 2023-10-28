@@ -246,16 +246,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fast_image_resize"
-version = "2.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc789a40040e11bbe4ba31ca319406805a12fe3f8d71314bbc4bd076602ad55a"
-dependencies = [
- "num-traits",
- "thiserror",
-]
-
-[[package]]
 name = "fdeflate"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -265,11 +255,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "fimg"
-version = "0.4.19"
+name = "fer"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4e6f0d9ed301d84fa7a855c511e47b7e169b4f9462a5d6e8aa908cbbd61cb28"
+checksum = "6a02dba6a60cd31533cf16561ced53239686d18f1464bff49579dd320fcea081"
+
+[[package]]
+name = "fimg"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22d127603d1030c98588eca066b1092ed4b8c5ee0707cf4995c6e67486380e41"
 dependencies = [
+ "fer",
  "mattr",
  "png",
  "umath",
@@ -627,7 +624,6 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger",
- "fast_image_resize",
  "fimg",
  "image",
  "log",
@@ -721,26 +717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6093bad37da69aab9d123a8091e4be0aa4a03e4d601ec641c327398315f62b64"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "thiserror"
-version = "1.0.50"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9a7210f5c9a7156bb50aa36aed4c95afb51df0df00713949448cf9e97d382d2"
-dependencies = [
- "thiserror-impl",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.50"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "266b2e40bc00e5a6c09c3584011e08b06f123c00362c92b975ba9843aaaa14b8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

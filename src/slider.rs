@@ -3,7 +3,7 @@ use std::{io::Read, sync::Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, Context};
-use fimg::{OverlayAt, Image as Img};
+use fimg::{OverlayAt, Image as Img, scale::Lanczos3};
 use rayon::prelude::*;
 use serde::{Deserialize, de};
 
@@ -105,26 +105,6 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
     Ok(stitched.into_inner().unwrap())
 }
 
-fn resize(image: Image<Box<[u8]>>, x: u32, y: u32) -> Image<Box<[u8]>> {
-    let mut dst = fr::Image::new(
-        x.try_into().unwrap(),
-        y.try_into().unwrap(),
-        fr::PixelType::U8x3
-    );
-
-    fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3))
-        .resize(&fr::Image::from_vec_u8(
-            // width and height are internally stored as NonZeroU32 anyway
-            image.width().try_into().unwrap(),
-            image.height().try_into().unwrap(),
-            // why this requires mutability i have no idea
-            image.take_buffer().into_vec(),
-            fr::PixelType::U8x3
-        ).unwrap().view(), &mut dst.view_mut()).unwrap();
-    
-    Image::build(dst.width().get(), dst.height().get()).buf(dst.into_vec()).boxed()
-}
-
 fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
     use std::cmp::Ordering;
 
@@ -141,7 +121,7 @@ fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
     
     log::info!("Resizing source image...");
 
-    let source = resize(image, disk_dim, disk_dim);
+    let source = image.scale::<Lanczos3>(disk_dim, disk_dim);
 
     let composite = if let Some(path) = &config.background_image {
         static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
@@ -159,7 +139,7 @@ fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
                 image.height() != config.resolution_y {
                 log::info!("Resizing background image to fit...");
 
-                image = resize(image, config.resolution_x, config.resolution_y);
+                image = image.scale::<Lanczos3>(config.resolution_x, config.resolution_y);
             }
 
             anyhow::Ok(image)
