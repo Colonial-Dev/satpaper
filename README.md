@@ -54,7 +54,7 @@ All binaries can be found in the [releases](https://github.com/Colonial-Dev/satp
 ### From Source
 
 Dependencies:
-- The most recent stable [Rust toolchain](https://rustup.rs/).
+- The [Rust programming language](https://rustup.rs/).
 - A C/C++ toolchain (such as `gcc`.)
 
 Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
@@ -62,7 +62,7 @@ Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`
 cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch master
 ```
 
-#### Running as systemd service
+#### Running as `systemd` service
 To automatically start Satpaper when you log in, you can use a `systemd` unit.
 
 ```
@@ -92,7 +92,7 @@ systemctl --user enable satpaper
 systemctl --user start satpaper
 ```
 
-#### Running as a launchd service (Mac)
+#### Running as a `launchd` service (Mac)
 
 ```sh
 # (Ensure background folder location exists)
