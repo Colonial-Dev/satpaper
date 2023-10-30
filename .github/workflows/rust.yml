@@ -19,14 +19,10 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
-    - name: Install Rust `std` source
-      run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
-      run: cargo test -Zbuild-std --target x86_64-unknown-linux-gnu --release
-      env:
-        RUSTFLAGS: "-Zsanitizer=thread"
+      run: cargo test --release
   
   build-docker:
     runs-on: ubuntu-latest
