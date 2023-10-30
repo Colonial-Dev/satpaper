@@ -108,8 +108,7 @@ namespace Win32 {{
 add-type $code
 
 # Apply the Change on the system
-[Win32.Wallpaper]::SetWallpaper("{}")"#,
-        path
+[Win32.Wallpaper]::SetWallpaper("{path}")"#
     );
 
     Command::new("powershell")
@@ -128,8 +127,7 @@ add-type $code
 
 fn set_mac(path: &str) -> Result<()> {
     let applescript = format!(
-        r#"tell application "System Events" to set picture of every desktop to "{}""#,
-        path
+        r#"tell application "System Events" to set picture of every desktop to "{path}""#
     );
 
     Command::new("osascript")

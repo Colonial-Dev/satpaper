@@ -4,6 +4,7 @@ WORKDIR /code
 
 COPY Cargo.toml .
 COPY Cargo.lock .
+COPY rust-toolchain.toml .
 COPY src/ src/
 
 RUN apk update && apk add g++ zlib zlib-dev

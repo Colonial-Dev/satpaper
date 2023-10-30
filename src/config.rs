@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
+use fimg::Image;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -71,7 +72,7 @@ pub enum Satellite {
 }
 
 impl Satellite {
-    pub fn id(&self) -> &'static str {
+    pub fn id(self) -> &'static str {
         use Satellite::*;
 
         match self {
@@ -83,7 +84,7 @@ impl Satellite {
         }
     }
 
-    pub fn max_zoom(&self) -> usize {
+    pub fn max_zoom(self) -> u32 {
         use Satellite::*;
 
         match self {
@@ -92,16 +93,15 @@ impl Satellite {
         }
     }
 
-    pub fn image_size(&self) -> usize {
-        use Satellite::*;
-
-        match self {
-            GOESEast | GOESWest | Himawari => 10_848,
-            Meteosat9 | Meteosat10 => 3_712,
-        }
+    pub fn image(self) -> Image<Box<[u8]>, 3> {
+        Image::alloc(self.tile_count() * self.tile_size(), self.tile_count() * self.tile_size()).boxed()
     }
 
-    pub fn tile_count(&self) -> usize {
+    pub fn tile_image(self) -> Image<Box<[u8]>, 3> {
+        Image::alloc(self.tile_size(), self.tile_size()).boxed()
+    }
+
+    pub fn tile_count(self) -> u32 {
         use Satellite::*;
 
         match self {
@@ -110,11 +110,12 @@ impl Satellite {
         }
     }
 
-    pub fn tile_size(&self) -> usize {
+    pub fn tile_size(self) -> u32 {
         use Satellite::*;
 
         match self {
-            GOESEast | GOESWest | Himawari => 678,
+            GOESEast | GOESWest => 678,
+            Himawari => 688,
             Meteosat9 | Meteosat10 => 464,
         }
     }

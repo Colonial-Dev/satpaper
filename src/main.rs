@@ -1,3 +1,4 @@
+#![feature(once_cell_try, isqrt)]
 mod config;
 mod slider;
 mod wallpaper;
@@ -42,18 +43,17 @@ fn update_wallpaper() -> Result<()> {
             });
 
         if timestamp
-            .map(|old| old != new)
-            .unwrap_or(true) 
+            .map_or(true, |old| old != new)
         {
             log::info!("Timestamp has changed!");
             log::debug!("Old timestamp: {timestamp:?}, new timestamp: {new}");
             log::info!("Fetching updated source and compositing new wallpaper...");
-            
+
             if slider::composite_latest_image(&config)? {
                 timestamp = Some(new);
 
                 if config.once {
-                    return  Ok(());
+                    return Ok(());
                 }
 
                 wallpaper::set(
@@ -67,7 +67,7 @@ fn update_wallpaper() -> Result<()> {
 
         log::debug!("Sleeping for {SLEEP_DURATION:?}...");
 
-        sleep(SLEEP_DURATION)
+        sleep(SLEEP_DURATION);
     }
 
     #[allow(unreachable_code)]
