@@ -61,6 +61,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             );
 
             log::debug!("Scraping tile at ({x}, {y}).");
+            
             let resp = agent
                 .get(&url)
                 .call()?;
@@ -68,9 +69,11 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             let len: usize = resp.header("Content-Length")
                 .expect("Response header should have Content-Length")
                 .parse()?;
+            
             let mut buf = vec![0; len];
             let mut read = 0;
             let mut reader = resp.into_reader();
+            
             while read < len {
                 read += reader.read(&mut buf[read..])?;
             }
@@ -125,6 +128,7 @@ fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
 
     let composite = if let Some(path) = &config.background_image {
         static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
+
         let mut bg = BG.get_or_try_init(|| {
             use image::io::Reader;
 
@@ -133,10 +137,12 @@ fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
                 .decode()
                 .context("Failed to load background image - corrupt or unsupported?")?
                 .into_rgb8();
+
             let mut image = Image::build(image.width(), image.height()).buf(image.into_vec().into_boxed_slice());
 
             if image.width() != config.resolution_x || 
-                image.height() != config.resolution_y {
+               image.height() != config.resolution_y 
+            {
                 log::info!("Resizing background image to fit...");
 
                 image = image.scale::<Lanczos3>(config.resolution_x, config.resolution_y);
@@ -144,19 +150,34 @@ fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
 
             anyhow::Ok(image)
         })?.clone();
+
         log::info!("Compositing source into destination...");
-        cutout_disk(bg.as_mut(), source.as_ref(), (config.resolution_x - disk_dim) / 2, (config.resolution_y - disk_dim) / 2);
-        bg
-    } else {
-        let mut behind = Image::alloc(config.resolution_x, config.resolution_y).boxed();
-        unsafe { behind.overlay_at(
-            &source,
+
+        cutout_disk(
+            bg.as_mut(),
+            source.as_ref(),
             (config.resolution_x - disk_dim) / 2,
-            (config.resolution_y - disk_dim) / 2,
-        ) };
+            (config.resolution_y - disk_dim) / 2
+        );
+
+        bg
+    }
+    else {
+        let mut behind = Image::alloc(config.resolution_x, config.resolution_y).boxed();
+
+        unsafe { 
+            behind.overlay_at(
+                &source,
+                (config.resolution_x - disk_dim) / 2,
+                (config.resolution_y - disk_dim) / 2,
+            ) 
+        };
+
         behind
     };
+    
     log::info!("Compositing complete.");
+
     composite.save(
         config.target_path.join(OUTPUT_NAME)
     );
@@ -271,8 +292,12 @@ where
         }
 
         fn visit_seq<S: de::SeqAccess<'de>>(self, mut seq: S) -> Result<Self::Value, S::Error> {    
-            let value = seq.next_element()?.ok_or(de::Error::custom("empty seq"))?;
+            let value = seq.next_element()?
+                .ok_or(de::Error::custom("empty seq"))?;
+            
+            #[allow(clippy::redundant_pattern_matching)]
             while let Some(_) = seq.next_element::<u64>()? {}
+
             Ok(value)
         }
     }
@@ -334,6 +359,7 @@ impl Date {
 }
 
 #[test]
+#[allow(clippy::inconsistent_digit_grouping)]
 fn test_date_split() {
     assert_eq!(Date { date: 2023_10_26 }.split(), (2023, 10, 26));
     assert_eq!(Date { date: 2027_04_25 }.split(), (2027, 4, 25));

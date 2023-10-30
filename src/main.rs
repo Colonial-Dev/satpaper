@@ -1,4 +1,5 @@
 #![feature(once_cell_try, isqrt)]
+
 mod config;
 mod slider;
 mod wallpaper;
