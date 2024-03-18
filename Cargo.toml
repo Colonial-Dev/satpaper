@@ -16,18 +16,18 @@ strip = true
 
 [dependencies]
 # Runtime
-anyhow = "1.0.75"
-log = "0.4.20"
-env_logger = "0.10.0"
-clap = { version = "4.4.2", features = ["derive", "env"] }
+anyhow = "=1.0.81"
+log = "=0.4.21"
+env_logger = "=0.11.3"
+clap = { version = "=4.5.3", features = ["derive", "env"] }
 
 # Compositing
-image = { version = "0.24.7", features = ["jpeg", "gif", "png", "pnm", "qoi", "tga", "tiff", "webp", "bmp", "dds", "dxt"], default-features = false }
-fimg = "0.4.20"
-png = "0.17.10"
+image = { version = "=0.25.0", features = ["jpeg", "gif", "png", "pnm", "qoi", "tga", "tiff", "webp", "bmp", "dds"], default-features = false }
+fimg = "=0.4.41"
+png = "=0.17.13"
 
 # Scraping
-ureq = "2.7.1"
-serde = { version = "1.0.188", features = ["derive"] }
-serde_json = "1.0.105"
-rayon = "1.8.0"
+ureq = "=2.9.6"
+serde = { version = "=1.0.197", features = ["derive"] }
+serde_json = "=1.0.114"
+rayon = "=1.9.0"
