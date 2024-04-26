@@ -71,6 +71,15 @@ pub enum Satellite {
     Meteosat10,
 }
 
+impl Config {
+    pub fn disk(&self) -> u32 {
+        let smaller_dim = self.resolution_x.min(self.resolution_y);
+
+        let disk_dim = smaller_dim as f32 * (self.disk_size as f32 / 100.0);
+        disk_dim.floor() as u32
+    }
+}
+
 impl Satellite {
     pub fn id(self) -> &'static str {
         use Satellite::*;
@@ -91,10 +100,6 @@ impl Satellite {
             GOESEast | GOESWest | Himawari => 4,
             Meteosat9 | Meteosat10 => 3,
         }
-    }
-
-    pub fn image(self) -> Image<Box<[u8]>, 3> {
-        Image::alloc(self.tile_count() * self.tile_size(), self.tile_count() * self.tile_size()).boxed()
     }
 
     pub fn tile_image(self) -> Image<Box<[u8]>, 3> {

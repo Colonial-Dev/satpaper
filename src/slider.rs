@@ -1,5 +1,4 @@
-use std::sync::{PoisonError, OnceLock};
-use std::{io::Read, sync::Mutex};
+use std::sync::{PoisonError, OnceLock, Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, Context};
@@ -35,7 +34,6 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
 
 fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
     let tile_count = config.satellite.tile_count();
-    let tile_size = config.satellite.tile_size();
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
@@ -44,6 +42,9 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
 
     let time = Time::fetch(config)?;
     let (year, month, day) = Date::fetch(config)?.split();
+
+    let disk_dim = config.disk();
+    let tile_size = disk_dim / tile_count;
 
     let tiles = (0..tile_count)
         .flat_map(|x| {
@@ -60,7 +61,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
                 config.satellite.max_zoom()
             );
 
-            log::debug!("Scraping tile at ({x}, {y}).");
+            log::info!("Scraping tile at ({x}, {y}).");
             
             let resp = agent
                 .get(&url)
@@ -69,16 +70,16 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             let len: usize = resp.header("Content-Length")
                 .expect("Response header should have Content-Length")
                 .parse()?;
-            
-            let mut buf = vec![0; len];
-            let mut read = 0;
-            let mut reader = resp.into_reader();
-            
-            while read < len {
-                read += reader.read(&mut buf[read..])?;
-            }
 
-            log::debug!(
+            let reader = resp.into_reader();
+            let dec = png::Decoder::new(reader);
+            let mut reader = dec.read_info()?;
+            let mut buf = config.satellite.tile_image();
+            let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
+            debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
+            let buf = buf.scale::<Lanczos3>(tile_size, tile_size);
+
+            log::info!(
                 "Finished scraping tile at ({x}, {y}). Size: {:.2}KiB",
                 len as f32 / 1024.0
             );
@@ -87,16 +88,9 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
         });
     
     log::info!("Stitching tiles...");
-    let stitched = Mutex::new(config.satellite.image());
-
+    let stitched = Mutex::new(Image::alloc(disk_dim, disk_dim).boxed());
     tiles.try_for_each(|a|{
-        let (y, x, tile) = a?;
-        log::debug!("Decoding png ({x} {y})");
-        let dec = png::Decoder::new(&*tile);
-        let mut reader = dec.read_info()?;
-        let mut buf = config.satellite.tile_image();
-        let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
-        debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
+        let (y, x, buf) = a?;
         // yes, this is possible lockless.
         // no, i will not do it.
         // if you do it, construct a sendable pointer, then exclusively use .add and slice::from_raw_parts(_mut)
@@ -108,23 +102,10 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
     Ok(stitched.into_inner().unwrap())
 }
 
-fn composite(config: &Config, image: Image<Box<[u8]>>) -> Result<()> {
-    use std::cmp::Ordering;
-
+fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
     log::info!("Compositing...");
-    
-    let smaller_dim = match config.resolution_x.cmp(&config.resolution_y) {
-        Ordering::Less => config.resolution_x,
-        Ordering::Equal => config.resolution_x,
-        Ordering::Greater => config.resolution_y,
-    };
 
-    let disk_dim = smaller_dim as f32 * (config.disk_size as f32 / 100.0);
-    let disk_dim = disk_dim.floor() as u32;
-    
-    log::info!("Resizing source image...");
-
-    let source = image.scale::<Lanczos3>(disk_dim, disk_dim);
+    let disk_dim = config.disk();
 
     let composite = if let Some(path) = &config.background_image {
         static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
