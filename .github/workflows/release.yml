@@ -19,16 +19,13 @@ jobs:
       - name: Install MUSL dependencies
         run: sudo apt-get install -y musl-tools
       - name: Install nightly MUSL toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly
-            target: x86_64-unknown-linux-musl
+        run: rustup target add x86_64-unknown-linux-musl
       - name: Build
         run: cargo build --release --target x86_64-unknown-linux-musl
         env:
             RUSTFLAGS: "-Ctarget-feature=+sse4.1"
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: satpaper-x86_64-unknown-linux-musl
           path: target/x86_64-unknown-linux-musl/release/satpaper
@@ -47,7 +44,7 @@ jobs:
         env:
             RUSTFLAGS: "-Ctarget-feature=+sse4.1"
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: satpaper-x86_64-pc-windows-gnu.exe
           path: target/release/satpaper.exe
@@ -66,7 +63,7 @@ jobs:
         env:
             RUSTFLAGS: "-Ctarget-feature=+sse4.1"
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: satpaper-x86_64-apple-darwin
           path: target/release/satpaper
