@@ -85,7 +85,7 @@ impl Satellite {
         use Satellite::*;
 
         match self {
-            GOESEast => "goes-16",
+            GOESEast => "goes-19",
             GOESWest => "goes-18",
             Himawari => "himawari",
             Meteosat9 => "meteosat-9",
