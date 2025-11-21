@@ -6,6 +6,8 @@ services:
       dockerfile: ./docker/Dockerfile
     environment:
       - SATPAPER_SATELLITE=goes-east
+      - SATPAPER_PRODUCT=geocolor
+      - SATPAPER_SECTOR=full_disk
       - SATPAPER_RESOLUTION_X=2560
       - SATPAPER_RESOLUTION_Y=1440
       - SATPAPER_DISK_SIZE=95
