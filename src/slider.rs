@@ -17,8 +17,6 @@ use super::{
 pub type Image<T> = Img<T, 3>;
 
 const SLIDER_BASE_URL: &str = "https://rammb-slider.cira.colostate.edu";
-const SLIDER_SECTOR: &str = "full_disk";
-const SLIDER_PRODUCT: &str = "geocolor";
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -55,8 +53,10 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
         .map(|(x, y)| -> Result<_> {
             // year:04 i am hilarious
             let url = format!(
-                "{SLIDER_BASE_URL}/data/imagery/{year:04}/{month:02}/{day:02}/{}---{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{}/{:02}/{x:03}_{y:03}.png",
+                "{SLIDER_BASE_URL}/data/imagery/{year:04}/{month:02}/{day:02}/{}---{}/{}/{}/{:02}/{x:03}_{y:03}.png",
                 config.satellite.id(),
+                config.sector,
+                config.product,
                 time.as_int(),
                 config.satellite.max_zoom()
             );
@@ -74,7 +74,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             let reader = resp.into_reader();
             let dec = png::Decoder::new(reader);
             let mut reader = dec.read_info()?;
-            let mut buf = config.satellite.tile_image();
+            let mut buf = config.satellite.tile_image(&config.sector);
             let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
             debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             let buf = buf.scale::<Lanczos3>(tile_size, tile_size);
@@ -289,8 +289,10 @@ where
 impl Time {
     pub fn fetch(config: &Config) -> Result<Self> {
         let url = format!(
-            "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/latest_times.json",
-            config.satellite.id()
+            "{SLIDER_BASE_URL}/data/json/{}/{}/{}/latest_times.json",
+            config.satellite.id(),
+            config.sector,
+            config.product
         );
         
         let json = ureq::get(&url)
@@ -316,8 +318,10 @@ struct Date {
 impl Date {
     pub fn fetch(config: &Config) -> Result<Self> {
         let url = format!(
-            "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/available_dates.json",
-            config.satellite.id()
+            "{SLIDER_BASE_URL}/data/json/{}/{}/{}/available_dates.json",
+            config.satellite.id(),
+            config.sector,
+            config.product
         );
 
         let json = ureq::get(&url)
