@@ -85,6 +85,8 @@ mod tests {
             satellite: Satellite::GOESEast,
             resolution_x: 2556,
             resolution_y: 1440,
+            product: "geocolor",
+            sector: "full_disk",
             disk_size: 95,
             target_path: ".".into(),
             wallpaper_command: None,

@@ -27,6 +27,15 @@ pub struct Config {
     /// The Y resolution/height of the generated wallpaper.
     #[arg(short = 'y', long, env = "SATPAPER_RESOLUTION_Y")]
     pub resolution_y: u32,
+
+    /// The product requested. (geocolor, etc)
+    #[arg(short = 'p', long, env = "SATPAPER_PRODUCT", default_value = "geocolor")]
+    pub product: String,
+
+    /// The sector requested. (full_disk, conus, etc)
+    #[arg(short = 'c', long, env = "SATPAPER_SECTOR", default_value = "full_disk")]
+    pub sector: String,
+
     /// The size of the "disk" (Earth) relative to the generated wallpaper's
     /// smaller dimension.
     /// 
@@ -102,8 +111,8 @@ impl Satellite {
         }
     }
 
-    pub fn tile_image(self) -> Image<Box<[u8]>, 3> {
-        Image::alloc(self.tile_size(), self.tile_size()).boxed()
+    pub fn tile_image(self, sector: &String) -> Image<Box<[u8]>, 3> {
+        Image::alloc(self.tile_size(sector), self.tile_size(sector)).boxed()
     }
 
     pub fn tile_count(self) -> u32 {
@@ -115,13 +124,27 @@ impl Satellite {
         }
     }
 
-    pub fn tile_size(self) -> u32 {
+    pub fn tile_size(self, sector: &String) -> u32 {
         use Satellite::*;
 
         match self {
-            GOESEast | GOESWest => 678,
-            Himawari => 688,
-            Meteosat9 | Meteosat10 => 464,
+            GOESEast | GOESWest => match sector.as_str() {
+                "full_disk" => 678,
+                "conus" => 625,
+                "mesoscale_01" => 500,
+                "mesoscale_02" => 500,
+                _ => 678
+            },
+            Himawari => match sector.as_str() {
+                "full_disk" => 688,
+                "japan" => 750,
+                "mesoscale_01" => 500,
+                _ => 688
+            },
+            Meteosat9 | Meteosat10 =>  match sector.as_str() {
+                "full_disk" => 464,
+                _ => 464
+            },
         }
     }
 }

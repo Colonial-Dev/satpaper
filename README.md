@@ -22,6 +22,8 @@ There are several satellites to choose from, each covering a different region of
 - Meteosat 9 (Africa, Middle East, India, Central Asia)
 - Meteosat 10 (Atlantic Ocean, Africa, Europe)
 
+For each satellite, you can select a "sector" and a "product". The sector determines which part of the planet to zoom in on (defaults to 'full_disk', which is the entire Earth), and the product determines how the various black-and-white sensors are combined to produce the final image. The default is 'geocolor', which is an approximation of visible light, with some enhancement at night.
+
 It's also possible to specify a custom background image, if desired.
 
 ## Warning - Data Usage
@@ -74,6 +76,8 @@ Description=Run Satpaper on login.
 Environment=SATPAPER_SATELLITE=goes-east
 Environment=SATPAPER_RESOLUTION_X=2560
 Environment=SATPAPER_RESOLUTION_Y=1440
+Environment=SATPAPER_PRODUCT=geocolor
+Environment=SATPAPER_SECTOR=full_disk
 Environment=SATPAPER_DISK_SIZE=94
 Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
 
@@ -120,6 +124,10 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
         <string>2560</string>
         <key>SATPAPER_RESOLUTION_Y</key>
         <string>1440</string>
+        <key>SATPAPER_PRODUCT</key>
+        <string>geocolor</string>
+        <key>SATPAPER_SECTOR</key>
+        <string>full_disk</string>
         <key>SATPAPER_DISK_SIZE</key>
         <string>94</string>
         <key>SATPAPER_TARGET_PATH</key>
