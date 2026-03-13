@@ -29,10 +29,20 @@ pub struct Config {
     pub resolution_y: u32,
     /// The size of the "disk" (Earth) relative to the generated wallpaper's
     /// smaller dimension.
-    /// 
+    ///
     /// Values in the 90-95 range are the best if you want maximum detail.
     #[arg(short, long, value_parser = clap::value_parser!(u32).range(1..=100), env = "SATPAPER_DISK_SIZE")]
     pub disk_size: u32,
+    /// The horizontal position of the disk as a percentage of the wallpaper width.
+    ///
+    /// 0 = left edge, 50 = centered, 100 = right edge.
+    #[arg(long, value_parser = clap::value_parser!(u32).range(0..=100), env = "SATPAPER_DISK_X", default_value_t = 50)]
+    pub disk_x: u32,
+    /// The vertical position of the disk as a percentage of the wallpaper height.
+    ///
+    /// 0 = top edge, 50 = centered, 100 = bottom edge.
+    #[arg(long, value_parser = clap::value_parser!(u32).range(0..=100), env = "SATPAPER_DISK_Y", default_value_t = 50)]
+    pub disk_y: u32,
     /// Where generated wallpapers should be saved.
     /// 
     /// Satpaper will output to a file called "satpaper_latest.png" at this path.
@@ -77,6 +87,21 @@ impl Config {
 
         let disk_dim = smaller_dim as f32 * (self.disk_size as f32 / 100.0);
         disk_dim.floor() as u32
+    }
+
+    /// Returns the (x, y) pixel offset for placing the disk on the wallpaper.
+    ///
+    /// The percentage positions the *center* of the disk, so at 50/50 the disk
+    /// is centered, and at 100/100 the disk center is at the bottom-right corner
+    /// (only the top-left quadrant visible).
+    pub fn disk_offset(&self) -> (i32, i32) {
+        let disk_dim = self.disk() as i32;
+        let half = disk_dim / 2;
+
+        let center_x = (self.resolution_x as f32 * (self.disk_x as f32 / 100.0)).floor() as i32;
+        let center_y = (self.resolution_y as f32 * (self.disk_y as f32 / 100.0)).floor() as i32;
+
+        (center_x - half, center_y - half)
     }
 }
 

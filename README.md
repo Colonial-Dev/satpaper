@@ -170,6 +170,11 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
     - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/satpaper_latest.png`.
 
 ### Advanced
+- `--disk-x`/`SATPAPER_DISK_X` - the horizontal position of the disk's center as a percentage of the wallpaper width. Defaults to `50` (centered).
+    - `0` = center of the disk at the left edge, `50` = centered, `100` = center at the right edge.
+    - Values other than `50` will cause the disk to be partially off-screen.
+- `--disk-y`/`SATPAPER_DISK_Y` - the vertical position of the disk's center as a percentage of the wallpaper height. Defaults to `50` (centered).
+    - `0` = center of the disk at the top edge, `50` = centered, `100` = center at the bottom edge.
 - `-b`/`--background-image`/`SATPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
     - Most common image formats are supported.
     - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.

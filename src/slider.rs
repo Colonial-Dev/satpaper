@@ -105,8 +105,6 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
 fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
     log::info!("Compositing...");
 
-    let disk_dim = config.disk();
-
     let composite = if let Some(path) = &config.background_image {
         static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
 
@@ -134,11 +132,13 @@ fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
 
         log::info!("Compositing source into destination...");
 
+        let (offset_x, offset_y) = config.disk_offset();
+
         cutout_disk(
             bg.as_mut(),
             source.as_ref(),
-            (config.resolution_x - disk_dim) / 2,
-            (config.resolution_y - disk_dim) / 2
+            offset_x,
+            offset_y
         );
 
         bg
@@ -146,13 +146,19 @@ fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
     else {
         let mut behind = Image::alloc(config.resolution_x, config.resolution_y).boxed();
 
-        unsafe { 
-            behind.overlay_at(
-                &source,
-                (config.resolution_x - disk_dim) / 2,
-                (config.resolution_y - disk_dim) / 2,
-            ) 
-        };
+        let (offset_x, offset_y) = config.disk_offset();
+        let bg_w = config.resolution_x as i32;
+        let bg_h = config.resolution_y as i32;
+
+        for x in 0..source.width() {
+            for y in 0..source.height() {
+                let bx = offset_x + x as i32;
+                let by = offset_y + y as i32;
+                if bx >= 0 && bx < bg_w && by >= 0 && by < bg_h {
+                    unsafe { behind.set_pixel(bx as u32, by as u32, source.pixel(x, y)) };
+                }
+            }
+        }
 
         behind
     };
@@ -180,9 +186,11 @@ enum Direction {
 fn cutout_disk(
     mut bg: Image<&mut [u8]>,
     earth: Image<&[u8]>,
-    offset_x: u32,
-    offset_y: u32
+    offset_x: i32,
+    offset_y: i32
 ) {
+    let bg_w = bg.width() as i32;
+    let bg_h = bg.height() as i32;
     // Find the midpoint and max of the edges.
     let x_max = earth.width() - 1;
     let y_max = earth.height() - 1;
@@ -242,9 +250,10 @@ fn cutout_disk(
 
     for x in 0..earth.width() {
         for y in 0..earth.height() {
-            if inside(x)(y) {
-                // overlay the earth
-                unsafe { bg.set_pixel(offset_x + x, offset_y + y, earth.pixel(x, y)) };
+            let bx = offset_x + x as i32;
+            let by = offset_y + y as i32;
+            if bx >= 0 && bx < bg_w && by >= 0 && by < bg_h && inside(x)(y) {
+                unsafe { bg.set_pixel(bx as u32, by as u32, earth.pixel(x, y)) };
             }
         }
     }
