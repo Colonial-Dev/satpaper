@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::sync::{PoisonError, OnceLock, Mutex};
 use std::time::Duration;
 
@@ -71,8 +72,9 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
                 .expect("Response header should have Content-Length")
                 .parse()?;
 
-            let reader = resp.into_reader();
-            let dec = png::Decoder::new(reader);
+            let mut data = Vec::with_capacity(len);
+            resp.into_reader().read_to_end(&mut data)?;
+            let dec = png::Decoder::new(std::io::Cursor::new(data));
             let mut reader = dec.read_info()?;
             let mut buf = config.satellite.tile_image();
             let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
@@ -109,9 +111,9 @@ fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
         static BG: OnceLock<Image<Box<[u8]>>> = OnceLock::new();
 
         let mut bg = BG.get_or_try_init(|| {
-            use image::io::Reader;
+            use image::ImageReader;
 
-            let image = Reader::open(path)
+            let image = ImageReader::open(path)
                 .context("Failed to open background image at path {path:?}")?
                 .decode()
                 .context("Failed to load background image - corrupt or unsupported?")?
@@ -213,7 +215,7 @@ fn cutout_disk(
 
         loop {
             // SAFETY: march
-            if unsafe { earth.pixel(x, y) } > BLACK {
+            if *unsafe { earth.pixel(x, y) } > BLACK {
                 log::debug!("Found disk bounds at {x}, {y}.");
                 break x
             };

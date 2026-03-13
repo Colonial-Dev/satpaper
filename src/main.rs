@@ -1,4 +1,4 @@
-#![feature(once_cell_try, isqrt)]
+#![feature(once_cell_try)]
 
 mod config;
 mod slider;
