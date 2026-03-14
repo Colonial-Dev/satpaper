@@ -33,7 +33,7 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
         })
 }
 
-fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
+pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
     let tile_count = config.satellite.tile_count();
 
     let agent = AgentBuilder::new()

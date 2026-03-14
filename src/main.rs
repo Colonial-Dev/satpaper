@@ -1,8 +1,11 @@
 #![feature(once_cell_try)]
 
+mod compositor;
 mod config;
+mod moon;
 mod orbital;
 mod slider;
+mod sun;
 mod wallpaper;
 
 use std::time::Duration;

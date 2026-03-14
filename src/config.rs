@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use fimg::Image;
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -72,7 +73,7 @@ pub struct Config {
     pub background_image: Option<PathBuf>,
 }
 
-#[derive(Debug, Copy, Clone, ValueEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 pub enum Satellite {
     GOESEast,
     GOESWest,
