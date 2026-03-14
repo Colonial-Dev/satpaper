@@ -1,5 +1,5 @@
 [package]
-name = "satpaper"
+name = "spacepaper"
 authors = ["Colonial"]
 version = "0.6.1"
 edition = "2021"

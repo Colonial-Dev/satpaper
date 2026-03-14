@@ -1,4 +1,4 @@
-<h1 align="center">Satpaper</h1>
+<h1 align="center">Spacepaper</h1>
 <h3 align="center">Display near-real-time satellite imagery on your desktop.</h3>
 
 <p align="center">
@@ -8,12 +8,12 @@
 </p>
 
 <p align = "center">
-<img src=".github/satpaper_latest.png" width = 768>
+<img src=".github/spacepaper_latest.png" width = 768>
 <br>
 <i> (Click to see full-size version) </i>
 </p>
 
-Satpaper generates live wallpapers for your desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
+Spacepaper generates live wallpapers for your desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
 
 There are several satellites to choose from, each covering a different region of the world.
 - GOES East (used in the sample image - covers most of North and South America)
@@ -25,7 +25,7 @@ There are several satellites to choose from, each covering a different region of
 It's also possible to specify a custom background image, if desired.
 
 ## Warning - Data Usage
-Satpaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the ballpark of twenty megabytes.
+Spacepaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the ballpark of twenty megabytes.
 
 If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
 
@@ -35,16 +35,16 @@ If you're on a metered and/or severely bandwidth-limited connection, twenty mega
 - KDE
 - Windows (tested to work on 10/11)
 - macOS (tested to work on Ventura)
-    - Satpaper will ask for System Event permission when running for the first time - you will need to grant access then restart the program for it to work.
+    - Spacepaper will ask for System Event permission when running for the first time - you will need to grant access then restart the program for it to work.
 
 If your environment is not supported, you have a few options:
-- Use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. 
-- Use the `--once` flag to turn Satpaper into a one-off wallpaper generator, allowing it to be integrated into a larger script or program.
+- Use the `--wallpaper-command`/`SPACEPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated.
+- Use the `--once` flag to turn Spacepaper into a one-off wallpaper generator, allowing it to be integrated into a larger script or program.
 
 PRs to add automatic support are also welcome!
 
 ### Precompiled Binaries
-Precompiled versions of Satpaper are available for:
+Precompiled versions of Spacepaper are available for:
 - Linux (compiled against `x86_64-unknown-linux-musl`, which should Just Work™ on most distributions) 
 - Windows (compiled on Github actions `windows-latest`)
 - macOS (compiled on Github actions `macos-latest`)
@@ -57,27 +57,27 @@ Dependencies:
 - The [Rust programming language](https://rustup.rs/).
 - A C/C++ toolchain (such as `gcc`.)
 
-Just use `cargo install`, and Satpaper will be compiled and added to your `PATH`.
+Just use `cargo install`, and Spacepaper will be compiled and added to your `PATH`.
 ```sh
 cargo install --locked --git https://github.com/Colonial-Dev/satpaper --branch master
 ```
 
 #### Running as `systemd` service
-To automatically start Satpaper when you log in, you can use a `systemd` unit.
+To automatically start Spacepaper when you log in, you can use a `systemd` unit.
 
 ```
 [Unit]
-Description=Run Satpaper on login.
+Description=Run Spacepaper on login.
 
 # You should adjust these values as needed/preferred.
 [Service]
-Environment=SATPAPER_SATELLITE=goes-east
-Environment=SATPAPER_RESOLUTION_X=2560
-Environment=SATPAPER_RESOLUTION_Y=1440
-Environment=SATPAPER_DISK_SIZE=94
-Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
+Environment=SPACEPAPER_SATELLITE=goes-east
+Environment=SPACEPAPER_RESOLUTION_X=2560
+Environment=SPACEPAPER_RESOLUTION_Y=1440
+Environment=SPACEPAPER_DISK_SIZE=94
+Environment=SPACEPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
 
-ExecStart=/var/home/colonial/.cargo/bin/satpaper
+ExecStart=/var/home/colonial/.cargo/bin/spacepaper
 Restart=on-failure
 RestartSec=5
 
@@ -87,9 +87,9 @@ WantedBy=default.target
 
 ```sh
 # (Write out or paste in your unit file)
-nano $HOME/.config/systemd/user/satpaper.service
-systemctl --user enable satpaper
-systemctl --user start satpaper
+nano $HOME/.config/systemd/user/spacepaper.service
+systemctl --user enable spacepaper
+systemctl --user start spacepaper
 ```
 
 #### Running as a `launchd` service (Mac)
@@ -97,12 +97,12 @@ systemctl --user start satpaper
 ```sh
 # (Ensure background folder location exists)
 touch $HOME/.local/share/backgrounds
-# Copy the plist below and place it at $HOME/Library/LaunchAgents/com.satpaper.plist
+# Copy the plist below and place it at $HOME/Library/LaunchAgents/com.spacepaper.plist
 # Ensure you change your username (placeholder is $YOUR_USERNAME)
-nano $HOME/Library/LaunchAgents/com.satpaper.plist
+nano $HOME/Library/LaunchAgents/com.spacepaper.plist
 # Launch the launchd service
-launchctl load $HOME/Library/LaunchAgents/com.satpaper.plist
-launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
+launchctl load $HOME/Library/LaunchAgents/com.spacepaper.plist
+launchctl start $HOME/Library/LaunchAgents/com.spacepaper.plist
 ```
 
 ```
@@ -111,23 +111,23 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.satpaper.rs</string>
+    <string>com.spacepaper.rs</string>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>SATPAPER_SATELLITE</key>
+        <key>SPACEPAPER_SATELLITE</key>
         <string>goes-east</string>
-        <key>SATPAPER_RESOLUTION_X</key>
+        <key>SPACEPAPER_RESOLUTION_X</key>
         <string>2560</string>
-        <key>SATPAPER_RESOLUTION_Y</key>
+        <key>SPACEPAPER_RESOLUTION_Y</key>
         <string>1440</string>
-        <key>SATPAPER_DISK_SIZE</key>
+        <key>SPACEPAPER_DISK_SIZE</key>
         <string>94</string>
-        <key>SATPAPER_TARGET_PATH</key>
+        <key>SPACEPAPER_TARGET_PATH</key>
         <string>/Users/${YOUR_USERNAME}/.local/share/backgrounds/</string>
     </dict>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/${YOUR_USERNAME}/.cargo/bin/satpaper</string>
+      <string>/Users/${YOUR_USERNAME}/.cargo/bin/spacepaper</string>
     </array>
     <key>KeepAlive</key>
     <true/>
@@ -141,9 +141,9 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
         <string>restart</string>
     </dict>
     <key>StandardErrorPath</key>
-    <string>/Users/${YOUR_USERNAME}/satpaper.log</string>
+    <string>/Users/${YOUR_USERNAME}/spacepaper.log</string>
     <key>StandardOutPath</key>
-    <string>/Users/${YOUR_USERNAME}/satpaper.log</string>
+    <string>/Users/${YOUR_USERNAME}/spacepaper.log</string>
     <key>UserName</key>
     <string>${YOUR_USERNAME}</string>
     <key>WorkingDirectory</key>
@@ -154,46 +154,46 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
 
 ### Using Docker
 
-Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker image can be found in the `docker/` directory. 
+Thanks to `cyberbit`, everything you need to build and run a Spacepaper Docker image can be found in the `docker/` directory. 
 
 ## Command Line Options
 ### Basic/Required
-- `-s`/`--satellite`/`SATPAPER_SATELLITE` - the satellite to source imagery from. 
+- `-s`/`--satellite`/`SPACEPAPER_SATELLITE` - the satellite to source imagery from.
     - Possible values: `goes-east`, `goes-west`, `himawari`, `meteosat9`, and `meteosat10`.
-- `-x`/`--resolution-x`/`SATPAPER_RESOLUTION_X` (and equivalents for the `y` dimension) - the width/height of the generated wallpaper.
+- `-x`/`--resolution-x`/`SPACEPAPER_RESOLUTION_X` (and equivalents for the `y` dimension) - the width/height of the generated wallpaper.
     - Any arbitary resolution should work, including vertical aspect ratios.
-- `-d`/`--disk-size`/`SATPAPER_DISK_SIZE` - the size of the "disk" (Earth) relative to the generated wallpaper's smaller dimension.
+- `-d`/`--disk-size`/`SPACEPAPER_DISK_SIZE` - the size of the "disk" (Earth) relative to the generated wallpaper's smaller dimension.
     - Required to be an integer value in the range `[1, 100]` inclusive, mapping to a percentage value.
     - For most desktop environments, a value in the 90-95 range will give the most detail while preventing parts from being cut off by UI elements like taskbars.
-- `-t`/`--target-path`/`SATPAPER_TARGET_PATH` - where the generated wallpaper should be saved.
-    - Satpaper will output to a file called "satpaper_latest.png" at this path.
-    - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/satpaper_latest.png`.
+- `-t`/`--target-path`/`SPACEPAPER_TARGET_PATH` - where the generated wallpaper should be saved.
+    - Spacepaper will output to a file called "spacepaper_latest.png" at this path.
+    - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/spacepaper_latest.png`.
 
 ### Advanced
-- `--disk-x`/`SATPAPER_DISK_X` - the horizontal position of the disk's center as a percentage of the wallpaper width. Defaults to `50` (centered).
+- `--disk-x`/`SPACEPAPER_DISK_X` - the horizontal position of the disk's center as a percentage of the wallpaper width. Defaults to `50` (centered).
     - `0` = center of the disk at the left edge, `50` = centered, `100` = center at the right edge.
     - Values other than `50` will cause the disk to be partially off-screen.
-- `--disk-y`/`SATPAPER_DISK_Y` - the vertical position of the disk's center as a percentage of the wallpaper height. Defaults to `50` (centered).
+- `--disk-y`/`SPACEPAPER_DISK_Y` - the vertical position of the disk's center as a percentage of the wallpaper height. Defaults to `50` (centered).
     - `0` = center of the disk at the top edge, `50` = centered, `100` = center at the bottom edge.
-- `-b`/`--background-image`/`SATPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
+- `-b`/`--background-image`/`SPACEPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
     - Most common image formats are supported.
-    - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.
-    - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
-- `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
+    - For best results, the image should match the specified resolution, but Spacepaper will resize the image to fit if need be.
+    - Spacepaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
+- `-w`/`--wallpaper-command`/`SPACEPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - The command will be run as `sh -c "{command} file://{image_path}"`.
-- `-o`/`--once`/`SATPAPER_ONCE` - whether or not to only run once.
-    - By default, Satpaper is designed to run as a daemon - it stays resident once launched and periodically attempts to update your wallpaper.
-    - With `--once` set, Satpaper will generate one wallpaper and terminate, without altering your existing wallpaper.
-    - This is ideal if you want to use Satpaper as a simple wallpaper generator or as part of a larger script/program.
+- `-o`/`--once`/`SPACEPAPER_ONCE` - whether or not to only run once.
+    - By default, Spacepaper is designed to run as a daemon - it stays resident once launched and periodically attempts to update your wallpaper.
+    - With `--once` set, Spacepaper will generate one wallpaper and terminate, without altering your existing wallpaper.
+    - This is ideal if you want to use Spacepaper as a simple wallpaper generator or as part of a larger script/program.
 
 ## FAQ
 
-### *Why is Satpaper using hundreds of megs of RAM?*
+### *Why is Spacepaper using hundreds of megs of RAM?*
 
 There are two possible causes:
-- You're seeing RAM usage spike to 500+ megabytes whenever Satpaper is compositing a new wallpaper. This is expected and unavoidable - the raw satellite imagery alone is ~450 megabytes after being decompressed and stitched together. However, this spike should only last several seconds - once composition is complete, the image buffers are all freed, and `libmimalloc_sys::mi_collect` is called to ensure as much memory as possible is returned to the OS.
-- You're using an early version of Satpaper. Early versions had issues with `libc`'s `free` deciding it was fine to just... not return multi-hundred-megabyte allocations to the OS, as well as the `tokio` runtime being fairly memory heavy. I resolved these issues by switching to `mimalloc` and transitioning away from async, so behavior *should* improve if you update.
+- You're seeing RAM usage spike to 500+ megabytes whenever Spacepaper is compositing a new wallpaper. This is expected and unavoidable - the raw satellite imagery alone is ~450 megabytes after being decompressed and stitched together. However, this spike should only last several seconds - once composition is complete, the image buffers are all freed, and `libmimalloc_sys::mi_collect` is called to ensure as much memory as possible is returned to the OS.
+- You're using an early version of Spacepaper. Early versions had issues with `libc`'s `free` deciding it was fine to just... not return multi-hundred-megabyte allocations to the OS, as well as the `tokio` runtime being fairly memory heavy. I resolved these issues by switching to `mimalloc` and transitioning away from async, so behavior *should* improve if you update.
 
 ### *Why are continents purple in night imagery?* / *Why does night imagery look kinda weird?*
 This is a byproduct of the CIRA GeoColor processing algorithm used to generate full-color images from the raw satellite data. GeoColor uses infrared for night-time imaging, which is then overlaid with false city lights and whitened clouds. The resulting image usually looks pretty good at a glance, but might begin to seem unnatural upon closer inspection.

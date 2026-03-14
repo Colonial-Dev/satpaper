@@ -12,7 +12,7 @@ use clap::Parser;
 
 use crate::config::*;
 
-const OUTPUT_NAME: &str = "satpaper_latest.png";
+const OUTPUT_NAME: &str = "spacepaper_latest.png";
 const SLEEP_DURATION: Duration = Duration::from_secs(60);
 
 fn main() -> Result<()> {
@@ -36,12 +36,17 @@ fn update_wallpaper() -> Result<()> {
     loop  {
         log::debug!("Checking timestamp...");
 
-        let new = slider::fetch_latest_timestamp(&config)
-            .unwrap_or_else(|err| {
+        let new = match slider::fetch_latest_timestamp(&config) {
+            Ok(ts) => ts,
+            Err(err) => {
                 log::error!("Failed to fetch latest timestamp: {err}");
+                if config.once {
+                    anyhow::bail!("Check aborted (running in --once mode)");
+                }
                 log::error!("Check aborted; waiting until next go round.");
                 timestamp.unwrap_or(0)
-            });
+            }
+        };
 
         if timestamp
             .map_or(true, |old| old != new)
@@ -63,6 +68,8 @@ fn update_wallpaper() -> Result<()> {
                 )?;
 
                 log::info!("New wallpaper composited and set.");
+            } else if config.once {
+                anyhow::bail!("Composition aborted (running in --once mode)");
             }
         }
 
@@ -94,7 +101,7 @@ mod tests {
 
         slider::composite_latest_image(&config)?;
 
-        std::fs::remove_file("./satpaper_latest.png")?;
+        std::fs::remove_file("./spacepaper_latest.png")?;
 
         Ok(())
     }

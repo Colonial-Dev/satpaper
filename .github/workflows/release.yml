@@ -27,8 +27,8 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: satpaper-x86_64-unknown-linux-musl
-          path: target/x86_64-unknown-linux-musl/release/satpaper
+          name: spacepaper-x86_64-unknown-linux-musl
+          path: target/x86_64-unknown-linux-musl/release/spacepaper
   build-win:
     name: Build (Windows)
     runs-on: windows-latest
@@ -46,8 +46,8 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: satpaper-x86_64-pc-windows-gnu.exe
-          path: target/release/satpaper.exe
+          name: spacepaper-x86_64-pc-windows-gnu.exe
+          path: target/release/spacepaper.exe
   build-mac:
     name: Build (macOS)
     runs-on: macos-latest
@@ -65,5 +65,5 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: satpaper-x86_64-apple-darwin
-          path: target/release/satpaper
+          name: spacepaper-x86_64-apple-darwin
+          path: target/release/spacepaper

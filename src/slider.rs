@@ -38,7 +38,7 @@ fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
-        .user_agent("satpaper")
+        .user_agent("spacepaper")
         .build();
 
     let time = Time::fetch(config)?;
