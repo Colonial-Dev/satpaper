@@ -1,6 +1,7 @@
 #![feature(once_cell_try)]
 
 mod config;
+mod orbital;
 mod slider;
 mod wallpaper;
 
@@ -93,6 +94,8 @@ mod tests {
             resolution_x: 2556,
             resolution_y: 1440,
             disk_size: 95,
+            disk_x: 50,
+            disk_y: 50,
             target_path: ".".into(),
             wallpaper_command: None,
             once: false,
