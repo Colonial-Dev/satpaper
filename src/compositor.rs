@@ -13,8 +13,6 @@ const R_MOON_KM: f64 = 1_737.4;
 const R_SUN_KM: f64 = 695_500.0;
 const AU_KM: f64 = 149_597_870.7;
 
-// Maximum size ratio between Earth and Moon/Sun in the final image
-const MAX_SIZE_RATIO: f64 = 3.0;
 
 // Padding: bodies should fit within this fraction of the canvas
 const FRAME_PADDING: f64 = 0.85;
@@ -38,31 +36,30 @@ fn satellite_color(sat: crate::config::Satellite) -> [u8; 3] {
 
 /// The computed dolly zoom camera parameters.
 #[derive(Debug)]
-struct DollyView {
-    camera_distance: f64,   // km from Earth center
-    fov_deg: f64,           // horizontal field of view (degrees)
-    earth_radius_deg: f64,  // angular radius of Earth (degrees)
-    moon_radius_deg: f64,   // angular radius of Moon (degrees)
-    sun_radius_deg: f64,    // angular radius of Sun (degrees)
-    moon_h: f64,            // Moon horizontal angle from Earth center (degrees)
-    moon_v: f64,            // Moon vertical angle (degrees)
-    sun_h: f64,             // Sun horizontal angle (degrees)
-    sun_v: f64,             // Sun vertical angle (degrees)
-    show_moon: bool,        // show Moon
-    show_sun: bool,         // show Sun
-    roll_deg: f64,          // camera roll applied (degrees)
+pub struct DollyView {
+    pub camera_distance: f64,   // km from Earth center
+    pub fov_deg: f64,           // horizontal field of view (degrees)
+    pub earth_radius_deg: f64,  // angular radius of Earth (degrees)
+    pub moon_radius_deg: f64,   // angular radius of Moon (degrees)
+    pub sun_radius_deg: f64,    // angular radius of Sun (degrees)
+    pub moon_h: f64,            // Moon horizontal angle from Earth center (degrees)
+    pub moon_v: f64,            // Moon vertical angle (degrees)
+    pub sun_h: f64,             // Sun horizontal angle (degrees)
+    pub sun_v: f64,             // Sun vertical angle (degrees)
+    pub show_moon: bool,        // show Moon
+    pub show_sun: bool,         // show Sun
+    pub roll_deg: f64,          // camera roll applied (degrees)
 }
 
-const MAX_COMPANION_ANGLE_DEG: f64 = 15.0;
 const BOTH_VISIBLE_THRESHOLD: f64 = 40.0;
 
 /// Compute dolly zoom parameters from a ScanEntry.
 ///
 /// If both Moon and Sun are within BOTH_VISIBLE_THRESHOLD, shows all three.
 /// Otherwise shows Earth plus the closest companion body.
-/// Moves the camera back until Earth is at most MAX_SIZE_RATIO times the
-/// smallest companion's angular size, then sets FOV to frame visible bodies.
-fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
+/// Dynamic zoom: closer companions get more zoom (ratio 2-5x).
+/// Free roll: companion angle drives camera rotation without clamping.
+pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
     let moon_angular_radius = (R_MOON_KM / view.moon_distance).asin().to_degrees();
     let sun_angular_radius = (R_SUN_KM / AU_KM).asin().to_degrees();
 
@@ -78,7 +75,8 @@ fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
         (false, true)
     };
 
-    // Size the dolly zoom based on the smallest visible companion
+    // Size the dolly zoom based on the smallest visible companion.
+    // Dynamic zoom: close companion → more zoom (ratio ~2), far → less zoom (ratio ~5).
     let companion_radius = match (show_moon, show_sun) {
         (true, true) => moon_angular_radius.max(sun_angular_radius),
         (true, false) => moon_angular_radius,
@@ -86,8 +84,16 @@ fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
         _ => unreachable!(),
     };
 
-    // Find camera distance where Earth angular radius = MAX_SIZE_RATIO * companion
-    let target_earth_radius = MAX_SIZE_RATIO * companion_radius;
+    let max_sep = match (show_moon, show_sun) {
+        (true, true) => moon_angle.max(sun_angle),
+        (true, false) => moon_angle,
+        (false, true) => sun_angle,
+        _ => unreachable!(),
+    };
+    let size_ratio = 1.5 + 1.0 * (max_sep / 40.0).clamp(0.0, 1.0);
+
+    // Find camera distance where Earth angular radius = size_ratio * companion
+    let target_earth_radius = size_ratio * companion_radius;
     let camera_distance = R_EARTH_KM / target_earth_radius.to_radians().sin();
 
     let earth_radius_deg = (R_EARTH_KM / camera_distance).asin().to_degrees();
@@ -126,9 +132,8 @@ fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
     ];
     let (sun_h, sun_v) = angles_from_camera(&sun_pos);
 
-    // Roll the camera to align visible bodies near horizontal.
-    // When showing both, align the midpoint of the two companions.
-    // When showing one, align that companion.
+    // Roll the camera so the companion direction drives rotation freely.
+    // When showing both, use the midpoint of the two companions.
     let roll_deg = {
         let (target_h, target_v) = if show_both {
             ((moon_h + sun_h) / 2.0, (moon_v + sun_v) / 2.0)
@@ -137,12 +142,7 @@ fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
         } else {
             (sun_h, sun_v)
         };
-        let angle = target_v.atan2(target_h).to_degrees();
-        if angle.abs() > MAX_COMPANION_ANGLE_DEG {
-            angle - angle.signum() * MAX_COMPANION_ANGLE_DEG
-        } else {
-            0.0
-        }
+        target_v.atan2(target_h).to_degrees().clamp(-90.0, 90.0)
     };
 
     // Apply 2D rotation
@@ -260,6 +260,77 @@ fn draw_circle(img: &mut Image<&mut [u8]>, cx: f64, cy: f64, radius: f64, color:
     }
 }
 
+/// Blit a circular source image onto a canvas, rotated by an arbitrary angle.
+///
+/// Uses inverse mapping: for each destination pixel in the bounding box,
+/// rotate back by `-angle_deg` to find the source pixel. Nearest-neighbor sampling.
+fn rotate_blit(
+    canvas: &mut Image<&mut [u8]>,
+    src: &Image<impl AsRef<[u8]>>,
+    dst_cx: f64,
+    dst_cy: f64,
+    dst_radius: f64,
+    angle_deg: f64,
+) {
+    let cw = canvas.width() as i32;
+    let ch = canvas.height() as i32;
+    let sw = src.width() as f64;
+    let sh = src.height() as f64;
+    let src_cx = sw / 2.0;
+    let src_cy = sh / 2.0;
+    let src_radius = sw.min(sh) / 2.0;
+
+    let scale = src_radius / dst_radius;
+    let angle_rad = -angle_deg.to_radians();
+    let (sin_a, cos_a) = angle_rad.sin_cos();
+    let dst_r2 = dst_radius * dst_radius;
+    let src_r2 = src_radius * src_radius;
+
+    let x_min = ((dst_cx - dst_radius).floor() as i32).max(0);
+    let x_max = ((dst_cx + dst_radius).ceil() as i32).min(cw - 1);
+    let y_min = ((dst_cy - dst_radius).floor() as i32).max(0);
+    let y_max = ((dst_cy + dst_radius).ceil() as i32).min(ch - 1);
+
+    let src_buf = src.buffer().as_ref();
+
+    for dy in y_min..=y_max {
+        for dx in x_min..=x_max {
+            let rel_x = dx as f64 - dst_cx;
+            let rel_y = dy as f64 - dst_cy;
+
+            if rel_x * rel_x + rel_y * rel_y > dst_r2 {
+                continue;
+            }
+
+            // Rotate back and scale to source coordinates
+            let rot_x = rel_x * cos_a - rel_y * sin_a;
+            let rot_y = rel_x * sin_a + rel_y * cos_a;
+            let sx = rot_x * scale + src_cx;
+            let sy = rot_y * scale + src_cy;
+
+            let sxi = sx.round() as i32;
+            let syi = sy.round() as i32;
+
+            if sxi < 0 || sxi >= sw as i32 || syi < 0 || syi >= sh as i32 {
+                continue;
+            }
+
+            // Check source is within circular disk
+            let src_rel_x = sxi as f64 - src_cx;
+            let src_rel_y = syi as f64 - src_cy;
+            if src_rel_x * src_rel_x + src_rel_y * src_rel_y > src_r2 {
+                continue;
+            }
+
+            let src_idx = (syi as usize * sw as usize + sxi as usize) * 3;
+            if src_idx + 2 < src_buf.len() {
+                let pixel = [src_buf[src_idx], src_buf[src_idx + 1], src_buf[src_idx + 2]];
+                unsafe { canvas.set_pixel(dx as u32, dy as u32, &pixel) };
+            }
+        }
+    }
+}
+
 /// Render a placeholder image with dolly zoom applied.
 pub fn render_placeholder(
     view: &ScanEntry,
@@ -271,8 +342,20 @@ pub fn render_placeholder(
 
     let ppd = width as f64 / dolly.fov_deg;
 
-    let earth_cx = width as f64 / 2.0;
-    let earth_cy = height as f64 / 2.0;
+    // Center-of-interest framing: place the midpoint between Earth and
+    // visible companion(s) at canvas center, pushing Earth to one side.
+    let (coi_h, coi_v) = match (dolly.show_moon, dolly.show_sun) {
+        (true, true) => (
+            (dolly.moon_h + dolly.sun_h) / 3.0,
+            (dolly.moon_v + dolly.sun_v) / 3.0,
+        ),
+        (true, false) => (dolly.moon_h / 2.0, dolly.moon_v / 2.0),
+        (false, true) => (dolly.sun_h / 2.0, dolly.sun_v / 2.0),
+        _ => (0.0, 0.0),
+    };
+
+    let earth_cx = width as f64 / 2.0 - coi_h * ppd;
+    let earth_cy = height as f64 / 2.0 + coi_v * ppd;
     let earth_r = dolly.earth_radius_deg * ppd;
 
     let moon_cx = earth_cx + dolly.moon_h * ppd;
@@ -306,12 +389,82 @@ pub fn render_placeholder(
     let mut canvas = Image::alloc(width, height).boxed();
 
     // Draw back to front: sun behind earth, moon in front
+    let north_angle = -dolly.roll_deg.to_radians();
+
     if dolly.show_sun {
         draw_circle(&mut canvas.as_mut(), sun_cx, sun_cy, sun_r, COLOR_SUN);
+        let dot_x = sun_cx + sun_r * 0.7 * north_angle.sin();
+        let dot_y = sun_cy - sun_r * 0.7 * north_angle.cos();
+        draw_circle(&mut canvas.as_mut(), dot_x, dot_y, sun_r * 0.1, [200, 150, 0]);
     }
     draw_circle(&mut canvas.as_mut(), earth_cx, earth_cy, earth_r, COLOR_EARTH);
+    {
+        let dot_x = earth_cx + earth_r * 0.7 * north_angle.sin();
+        let dot_y = earth_cy - earth_r * 0.7 * north_angle.cos();
+        draw_circle(&mut canvas.as_mut(), dot_x, dot_y, earth_r * 0.1, [80, 140, 255]);
+    }
     if dolly.show_moon {
         draw_circle(&mut canvas.as_mut(), moon_cx, moon_cy, moon_r, COLOR_MOON);
+        let dot_x = moon_cx + moon_r * 0.7 * north_angle.sin();
+        let dot_y = moon_cy - moon_r * 0.7 * north_angle.cos();
+        draw_circle(&mut canvas.as_mut(), dot_x, dot_y, moon_r * 0.1, [180, 180, 180]);
+    }
+
+    canvas
+}
+
+/// Render a composite image with actual body images, rotated by the camera roll.
+///
+/// Draw order: sun (behind) → earth → moon (in front).
+/// Each body image is rotated by `roll_deg` via `rotate_blit()`.
+pub fn render_composite(
+    view: &ScanEntry,
+    earth_img: &Image<Box<[u8]>>,
+    moon_img: Option<&Image<Box<[u8]>>>,
+    sun_img: Option<&Image<Box<[u8]>>>,
+    width: u32,
+    height: u32,
+) -> Image<Box<[u8]>> {
+    let aspect = width as f64 / height as f64;
+    let dolly = compute_dolly(view, aspect);
+
+    let ppd = width as f64 / dolly.fov_deg;
+
+    let (coi_h, coi_v) = match (dolly.show_moon, dolly.show_sun) {
+        (true, true) => (
+            (dolly.moon_h + dolly.sun_h) / 3.0,
+            (dolly.moon_v + dolly.sun_v) / 3.0,
+        ),
+        (true, false) => (dolly.moon_h / 2.0, dolly.moon_v / 2.0),
+        (false, true) => (dolly.sun_h / 2.0, dolly.sun_v / 2.0),
+        _ => (0.0, 0.0),
+    };
+
+    let earth_cx = width as f64 / 2.0 - coi_h * ppd;
+    let earth_cy = height as f64 / 2.0 + coi_v * ppd;
+    let earth_r = dolly.earth_radius_deg * ppd;
+
+    let moon_cx = earth_cx + dolly.moon_h * ppd;
+    let moon_cy = earth_cy - dolly.moon_v * ppd;
+    let moon_r = dolly.moon_radius_deg * ppd;
+
+    let sun_cx = earth_cx + dolly.sun_h * ppd;
+    let sun_cy = earth_cy - dolly.sun_v * ppd;
+    let sun_r = dolly.sun_radius_deg * ppd;
+
+    let mut canvas = Image::alloc(width, height).boxed();
+
+    // Draw back to front: sun → earth → moon
+    if dolly.show_sun {
+        if let Some(img) = sun_img {
+            rotate_blit(&mut canvas.as_mut(), img, sun_cx, sun_cy, sun_r, dolly.roll_deg);
+        }
+    }
+    rotate_blit(&mut canvas.as_mut(), earth_img, earth_cx, earth_cy, earth_r, dolly.roll_deg);
+    if dolly.show_moon {
+        if let Some(img) = moon_img {
+            rotate_blit(&mut canvas.as_mut(), img, moon_cx, moon_cy, moon_r, dolly.roll_deg);
+        }
     }
 
     canvas
@@ -705,6 +858,78 @@ mod tests {
 
         render_graph(&stub_refs, &moon_angles, COLOR_MOON, Some(&moon_colors), "Moon angle", Path::new("/tmp/spacepaper_moon_graph.png"));
         render_graph(&stub_refs, &sun_angles, COLOR_SUN, Some(&sun_colors), "Sun angle", Path::new("/tmp/spacepaper_sun_graph.png"));
+
+        Ok(())
+    }
+
+    /// Decode JPEG bytes into an fimg RGB Image.
+    fn decode_jpeg(data: &[u8]) -> Image<Box<[u8]>> {
+        use image::ImageReader;
+        let reader = ImageReader::new(std::io::Cursor::new(data))
+            .with_guessed_format()
+            .expect("Failed to guess image format");
+        let img = reader.decode().expect("Failed to decode image").into_rgb8();
+        Image::build(img.width(), img.height()).buf(img.into_vec().into_boxed_slice())
+    }
+
+    #[test]
+    fn test_render_real_composite() -> Result<()> {
+        let scan_path = Path::new("scan_results.json");
+        if !scan_path.exists() {
+            eprintln!("No scan_results.json found — run scan_best_view test first");
+            return Ok(());
+        }
+
+        let scan = load_scan(scan_path)?;
+        let view = &scan.best;
+        eprintln!(
+            "Compositing: {} {:?} ({:?}) score={:.1}, roll={:.1}°",
+            view.datetime, view.winner, view.tier, view.score,
+            compute_dolly(view, 1920.0 / 1080.0).roll_deg,
+        );
+
+        // Fetch moon image
+        eprintln!("Fetching moon image...");
+        let moon_data = crate::moon::fetch_moon_image(&view.datetime)?;
+        let moon_img = decode_jpeg(&moon_data.data);
+        eprintln!("Moon: {}x{} (frame {})", moon_img.width(), moon_img.height(), moon_data.frame);
+
+        // Fetch sun image (SDO can be unreachable)
+        eprintln!("Fetching sun image...");
+        let sun_img = match crate::sun::fetch_sun_image(1024) {
+            Ok(data) => {
+                let img = decode_jpeg(&data);
+                eprintln!("Sun: {}x{}", img.width(), img.height());
+                Some(img)
+            }
+            Err(e) => {
+                eprintln!("SDO unavailable, skipping sun: {e}");
+                None
+            }
+        };
+
+        // For Earth, use a placeholder disk (real satellite fetch requires full Config/slider pipeline)
+        let earth_size = 1024u32;
+        let mut earth_img = Image::alloc(earth_size, earth_size).boxed();
+        let cx = earth_size as f64 / 2.0;
+        let cy = earth_size as f64 / 2.0;
+        let r = earth_size as f64 / 2.0 - 2.0;
+        draw_circle(&mut earth_img.as_mut(), cx, cy, r, COLOR_EARTH);
+        // North marker on earth placeholder
+        draw_circle(&mut earth_img.as_mut(), cx, cy - r * 0.7, r * 0.1, [255, 255, 255]);
+
+        let img = render_composite(view, &earth_img, Some(&moon_img), sun_img.as_ref(), 1920, 1080);
+
+        let out = Path::new("/tmp/spacepaper_real_composite.png");
+        img.save(out);
+        eprintln!("Saved to {}", out.display());
+
+        assert_eq!(img.width(), 1920);
+        assert_eq!(img.height(), 1080);
+
+        // Verify non-black
+        let non_black = img.buffer().chunks(3).any(|px| px[0] > 0 || px[1] > 0 || px[2] > 0);
+        assert!(non_black, "Image is entirely black");
 
         Ok(())
     }
