@@ -13,6 +13,7 @@ use super::{
     Config,
     OUTPUT_NAME
 };
+use crate::config::Satellite;
 
 /// rgb all the way down
 pub type Image<T> = Img<T, 3>;
@@ -33,18 +34,28 @@ pub fn composite_latest_image(config: &Config) -> Result<bool> {
         })
 }
 
+/// Download the latest full-disk image for a satellite at a fixed 2048×2048 resolution.
+///
+/// This is the standalone entry point — no `Config` needed.
+pub fn download_disk(satellite: Satellite) -> Result<Image<Box<[u8]>>> {
+    download_disk_inner(satellite, 2048)
+}
+
 pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
-    let tile_count = config.satellite.tile_count();
+    download_disk_inner(config.satellite, config.disk())
+}
+
+fn download_disk_inner(satellite: Satellite, disk_dim: u32) -> Result<Image<Box<[u8]>>> {
+    let tile_count = satellite.tile_count();
 
     let agent = AgentBuilder::new()
         .timeout(TIMEOUT)
         .user_agent("spacepaper")
         .build();
 
-    let time = Time::fetch(config)?;
-    let (year, month, day) = Date::fetch(config)?.split();
+    let time = Time::fetch(satellite)?;
+    let (year, month, day) = Date::fetch(satellite)?.split();
 
-    let disk_dim = config.disk();
     let tile_size = disk_dim / tile_count;
 
     let tiles = (0..tile_count)
@@ -57,13 +68,13 @@ pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             // year:04 i am hilarious
             let url = format!(
                 "{SLIDER_BASE_URL}/data/imagery/{year:04}/{month:02}/{day:02}/{}---{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{}/{:02}/{x:03}_{y:03}.png",
-                config.satellite.id(),
+                satellite.id(),
                 time.as_int(),
-                config.satellite.max_zoom()
+                satellite.max_zoom()
             );
 
             log::info!("Scraping tile at ({x}, {y}).");
-            
+
             let resp = agent
                 .get(&url)
                 .call()?;
@@ -76,7 +87,7 @@ pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
             resp.into_reader().read_to_end(&mut data)?;
             let dec = png::Decoder::new(std::io::Cursor::new(data));
             let mut reader = dec.read_info()?;
-            let mut buf = config.satellite.tile_image();
+            let mut buf = satellite.tile_image();
             let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
             debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
             let buf = buf.scale::<Lanczos3>(tile_size, tile_size);
@@ -88,7 +99,7 @@ pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
 
             Ok((x, y, buf))
         });
-    
+
     log::info!("Stitching tiles...");
     let stitched = Mutex::new(Image::alloc(disk_dim, disk_dim).boxed());
     tiles.try_for_each(|a|{
@@ -97,7 +108,7 @@ pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
         // no, i will not do it.
         // if you do it, construct a sendable pointer, then exclusively use .add and slice::from_raw_parts(_mut)
         // SAFETY: tiles iterates over the number of tiles, each tile == tile_size, `stitched` is a image of tile_size * tile_count.
-        unsafe { stitched.lock().unwrap_or_else(PoisonError::into_inner).overlay_at(&buf, x * tile_size, y * tile_size) };        
+        unsafe { stitched.lock().unwrap_or_else(PoisonError::into_inner).overlay_at(&buf, x * tile_size, y * tile_size) };
         anyhow::Ok(())
     })?;
 
@@ -262,7 +273,7 @@ fn cutout_disk(
 }
 
 pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
-    Ok(Time::fetch(config)?.as_int())   
+    Ok(Time::fetch(config.satellite)?.as_int())
 }
 
 #[derive(Debug, Deserialize)]
@@ -298,10 +309,10 @@ where
 
 
 impl Time {
-    pub fn fetch(config: &Config) -> Result<Self> {
+    pub fn fetch(satellite: Satellite) -> Result<Self> {
         let url = format!(
             "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/latest_times.json",
-            config.satellite.id()
+            satellite.id()
         );
         
         let json = ureq::get(&url)
@@ -325,10 +336,10 @@ struct Date {
 }
 
 impl Date {
-    pub fn fetch(config: &Config) -> Result<Self> {
+    pub fn fetch(satellite: Satellite) -> Result<Self> {
         let url = format!(
             "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/available_dates.json",
-            config.satellite.id()
+            satellite.id()
         );
 
         let json = ureq::get(&url)

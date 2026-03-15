@@ -422,6 +422,7 @@ pub fn render_composite(
     earth_img: &Image<Box<[u8]>>,
     moon_img: Option<&Image<Box<[u8]>>>,
     sun_img: Option<&Image<Box<[u8]>>>,
+    background: Option<&Image<Box<[u8]>>>,
     width: u32,
     height: u32,
 ) -> Image<Box<[u8]>> {
@@ -452,7 +453,16 @@ pub fn render_composite(
     let sun_cy = earth_cy - dolly.sun_v * ppd;
     let sun_r = dolly.sun_radius_deg * ppd;
 
-    let mut canvas = Image::alloc(width, height).boxed();
+    let mut canvas = if let Some(bg) = background {
+        use fimg::scale::Lanczos3;
+        if bg.width() == width && bg.height() == height {
+            bg.clone()
+        } else {
+            bg.clone().scale::<Lanczos3>(width, height)
+        }
+    } else {
+        Image::alloc(width, height).boxed()
+    };
 
     // Draw back to front: sun → earth → moon
     if dolly.show_sun {
@@ -512,6 +522,91 @@ pub fn compose_placeholder(
     };
 
     Ok(render_placeholder(&view, width, height))
+}
+
+/// Decode JPEG bytes into an fimg RGB Image.
+fn decode_jpeg(data: &[u8]) -> Image<Box<[u8]>> {
+    use image::ImageReader;
+    let reader = ImageReader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .expect("Failed to guess image format");
+    let img = reader.decode().expect("Failed to decode image").into_rgb8();
+    Image::build(img.width(), img.height()).buf(img.into_vec().into_boxed_slice())
+}
+
+/// Compose a real wallpaper: pick the best satellite, download its Earth imagery,
+/// fetch Moon and Sun images, and render the dolly zoom composite.
+pub fn compose(
+    utc_datetime: &str,
+    width: u32,
+    height: u32,
+    background: Option<&Image<Box<[u8]>>>,
+) -> Result<Image<Box<[u8]>>> {
+    let data = orbital::closest_satellite(utc_datetime, None)?;
+
+    let winner = data
+        .satellites
+        .iter()
+        .find(|s| s.satellite == data.winner)
+        .expect("Winner must be in satellites list");
+
+    let sat_mag = orbital::mag(&winner.sat_pos);
+    let sat_dir = [
+        winner.sat_pos[0] / sat_mag,
+        winner.sat_pos[1] / sat_mag,
+        winner.sat_pos[2] / sat_mag,
+    ];
+
+    let view = ScanEntry {
+        datetime: utc_datetime.to_string(),
+        winner: winner.satellite,
+        tier: winner.tier,
+        moon_theta_limb: winner.moon_theta_limb,
+        moon_horizontal: winner.moon_horizontal,
+        moon_vertical: winner.moon_vertical,
+        moon_visible: winner.moon_visible,
+        sun_theta_limb: winner.sun_theta_limb,
+        sun_horizontal: winner.sun_horizontal,
+        sun_vertical: winner.sun_vertical,
+        sun_visible: winner.sun_visible,
+        moon_phase: data.moon_phase,
+        moon_distance: data.moon_distance,
+        score: winner.moon_theta_limb.abs() + 0.5 * winner.sun_theta_limb.abs(),
+        sat_dir,
+        moon_pos: data.moon_pos,
+        sun_dir: data.sun_dir,
+    };
+
+    eprintln!("Downloading Earth imagery from {:?}...", winner.satellite);
+    let earth_img = crate::slider::download_disk(winner.satellite)?;
+
+    eprintln!("Fetching moon image...");
+    let moon_img = match crate::moon::fetch_moon_image(utc_datetime) {
+        Ok(moon_data) => {
+            let img = decode_jpeg(&moon_data.data);
+            eprintln!("Moon: {}x{} (frame {})", img.width(), img.height(), moon_data.frame);
+            Some(img)
+        }
+        Err(e) => {
+            eprintln!("Moon fetch failed, skipping: {e}");
+            None
+        }
+    };
+
+    eprintln!("Fetching sun image...");
+    let sun_img = match crate::sun::fetch_sun_image(1024) {
+        Ok(data) => {
+            let img = decode_jpeg(&data);
+            eprintln!("Sun: {}x{}", img.width(), img.height());
+            Some(img)
+        }
+        Err(e) => {
+            eprintln!("SDO unavailable, skipping sun: {e}");
+            None
+        }
+    };
+
+    Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), background, width, height))
 }
 
 /// Load a ScanResult from a JSON file.
@@ -862,16 +957,6 @@ mod tests {
         Ok(())
     }
 
-    /// Decode JPEG bytes into an fimg RGB Image.
-    fn decode_jpeg(data: &[u8]) -> Image<Box<[u8]>> {
-        use image::ImageReader;
-        let reader = ImageReader::new(std::io::Cursor::new(data))
-            .with_guessed_format()
-            .expect("Failed to guess image format");
-        let img = reader.decode().expect("Failed to decode image").into_rgb8();
-        Image::build(img.width(), img.height()).buf(img.into_vec().into_boxed_slice())
-    }
-
     #[test]
     fn test_render_real_composite() -> Result<()> {
         let scan_path = Path::new("scan_results.json");
@@ -918,7 +1003,7 @@ mod tests {
         // North marker on earth placeholder
         draw_circle(&mut earth_img.as_mut(), cx, cy - r * 0.7, r * 0.1, [255, 255, 255]);
 
-        let img = render_composite(view, &earth_img, Some(&moon_img), sun_img.as_ref(), 1920, 1080);
+        let img = render_composite(view, &earth_img, Some(&moon_img), sun_img.as_ref(), None, 1920, 1080);
 
         let out = Path::new("/tmp/spacepaper_real_composite.png");
         img.save(out);
@@ -978,6 +1063,54 @@ mod tests {
 
         assert!(status.success(), "ffmpeg failed");
         eprintln!("Saved preview video to {}", output.display());
+
+        Ok(())
+    }
+
+    fn load_image(path: &Path) -> Result<Image<Box<[u8]>>> {
+        use image::ImageReader;
+        let img = ImageReader::open(path)
+            .context("Failed to open image")?
+            .decode()
+            .context("Failed to decode image")?
+            .into_rgb8();
+        Ok(Image::build(img.width(), img.height()).buf(img.into_vec().into_boxed_slice()))
+    }
+
+    #[test]
+    fn test_compose_real() -> Result<()> {
+        let img = compose("2026-03-15T12:00", 1920, 1080, None)?;
+
+        let out = Path::new("/tmp/spacepaper_compose_real.png");
+        img.save(out);
+        eprintln!("Saved to {}", out.display());
+
+        assert_eq!(img.width(), 1920);
+        assert_eq!(img.height(), 1080);
+
+        let non_black = img.buffer().chunks(3).any(|px| px[0] > 0 || px[1] > 0 || px[2] > 0);
+        assert!(non_black, "Image is entirely black");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compose_starmap() -> Result<()> {
+        let bg_path = Path::new("starmap.png");
+        if !bg_path.exists() {
+            eprintln!("No starmap.png found — skipping");
+            return Ok(());
+        }
+
+        let bg = load_image(bg_path)?;
+        let img = compose("2026-03-15T12:00", 1920, 1080, Some(&bg))?;
+
+        let out = Path::new("/tmp/spacepaper_compose_starmap.png");
+        img.save(out);
+        eprintln!("Saved to {}", out.display());
+
+        assert_eq!(img.width(), 1920);
+        assert_eq!(img.height(), 1080);
 
         Ok(())
     }
