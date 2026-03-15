@@ -31,7 +31,7 @@ pub enum ViewTier {
     EarthOnly = 4,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SatelliteResult {
     pub satellite: Satellite,
     pub sat_pos: [f64; 3],
@@ -48,7 +48,7 @@ pub struct SatelliteResult {
     pub tier: ViewTier,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OrreryData {
     pub winner: Satellite,
     pub moon_pos: [f64; 3],
@@ -279,11 +279,33 @@ pub fn closest_satellite(
     })
 }
 
+const BOTH_VISIBLE_THRESHOLD: f64 = 40.0; // degrees
+
 fn select_winner(results: &[SatelliteResult], theta_limb_max: Option<f64>) -> Satellite {
-    // Pick the satellite where either the Moon or Sun is closest to Earth center-to-center.
-    // The dolly zoom handles occlusion, so we just want the tightest angular grouping.
+    let moon_angle = |r: &SatelliteResult| r.moon_horizontal.hypot(r.moon_vertical);
+    let sun_angle = |r: &SatelliteResult| r.sun_horizontal.hypot(r.sun_vertical);
+
+    // Prefer satellites that can see both Moon and Sun within threshold.
+    // Score those by max(moon, sun) — tightest overall composition.
+    // Fall back to closest single body if none can see both.
+    let both_visible: Vec<&SatelliteResult> = results.iter()
+        .filter(|r| moon_angle(r) < BOTH_VISIBLE_THRESHOLD && sun_angle(r) < BOTH_VISIBLE_THRESHOLD)
+        .collect();
+
+    if !both_visible.is_empty() {
+        return both_visible.iter()
+            .min_by(|a, b| {
+                let sa = moon_angle(a).max(sun_angle(a));
+                let sb = moon_angle(b).max(sun_angle(b));
+                sa.partial_cmp(&sb).unwrap()
+            })
+            .unwrap()
+            .satellite;
+    }
+
+    // No satellite sees both — pick the one with closest single body.
     let best_angle = |r: &SatelliteResult| -> f64 {
-        r.moon_theta_em.min(r.sun_theta_em)
+        moon_angle(r).min(sun_angle(r))
     };
 
     let filtered: Vec<&SatelliteResult> = if let Some(max) = theta_limb_max {
@@ -334,6 +356,28 @@ pub struct ScanResult {
     pub entries: Vec<ScanEntry>,
 }
 
+/// One hour of full orrery data (all 5 satellites).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HourlyEntry {
+    pub datetime: String,
+    pub data: OrreryData,
+}
+
+/// Full hourly dataset for analysis and testing.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HourlyDataset {
+    pub entries: Vec<HourlyEntry>,
+}
+
+impl HourlyDataset {
+    pub fn load(path: &std::path::Path) -> Result<Self> {
+        let json = std::fs::read_to_string(path)
+            .context("Failed to read hourly dataset")?;
+        serde_json::from_str(&json)
+            .context("Failed to parse hourly dataset")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,78 +424,90 @@ mod tests {
         Ok(())
     }
 
+    /// Collect full orrery data (all 5 satellites) for 30 days at hourly resolution.
+    /// Saves to test_data/hourly_30d.json for reuse by other tests.
     #[test]
-    fn scan_best_view() -> Result<()> {
+    fn collect_test_api_data() -> Result<()> {
         use chrono::{NaiveDateTime, Duration};
 
-        // Scan past 96 hours, one per hour
-        let end = NaiveDateTime::parse_from_str("2026-03-14T17:00:00", "%Y-%m-%dT%H:%M:%S")?;
-        let mut entries = Vec::new();
+        let out_dir = std::path::Path::new("test_data");
+        std::fs::create_dir_all(out_dir)?;
+        let out_path = out_dir.join("hourly_30d.json");
 
-        for h in 0..96 {
+        // Skip if data already exists
+        if out_path.exists() {
+            eprintln!("Data already exists at {} — delete to re-collect", out_path.display());
+            return Ok(());
+        }
+
+        let end = NaiveDateTime::parse_from_str("2026-03-15T00:00:00", "%Y-%m-%dT%H:%M:%S")?;
+        let mut entries = Vec::with_capacity(720);
+
+        for h in 0..720 {
             let dt = end - Duration::hours(h);
             let datetime = dt.format("%Y-%m-%dT%H:%M").to_string();
 
             match closest_satellite(&datetime, None) {
                 Ok(data) => {
-                    let w = data.satellites.iter()
-                        .find(|s| s.satellite == data.winner)
-                        .unwrap();
-
-                    let score = w.moon_theta_em.min(w.sun_theta_em);
-                    let sat_mag = mag(&w.sat_pos);
-                    let sat_dir = [w.sat_pos[0] / sat_mag, w.sat_pos[1] / sat_mag, w.sat_pos[2] / sat_mag];
-
-                    entries.push(ScanEntry {
-                        datetime,
-                        winner: data.winner,
-                        tier: w.tier,
-                        moon_theta_limb: w.moon_theta_limb,
-                        moon_horizontal: w.moon_horizontal,
-                        moon_vertical: w.moon_vertical,
-                        moon_visible: w.moon_visible,
-                        sun_theta_limb: w.sun_theta_limb,
-                        sun_horizontal: w.sun_horizontal,
-                        sun_vertical: w.sun_vertical,
-                        sun_visible: w.sun_visible,
-                        moon_phase: data.moon_phase,
-                        moon_distance: data.moon_distance,
-                        score,
-                        sat_dir,
-                        moon_pos: data.moon_pos,
-                        sun_dir: data.sun_dir,
-                    });
+                    entries.push(HourlyEntry { datetime, data });
                 }
                 Err(e) => {
                     eprintln!("Skipping {datetime}: {e}");
                 }
             }
+
+            if (h + 1) % 100 == 0 {
+                eprintln!("Collected {}/720 hours...", h + 1);
+            }
         }
 
-        // Sort by score (lower = closest body to Earth center)
-        entries.sort_by(|a, b| {
-            a.score.partial_cmp(&b.score).unwrap()
-        });
+        // Sort chronologically
+        entries.sort_by(|a, b| a.datetime.cmp(&b.datetime));
 
-        // Print top 10
-        eprintln!("\n=== TOP 10 BEST VIEWS ===");
-        for (i, e) in entries.iter().take(10).enumerate() {
-            eprintln!(
-                "#{}: {} {:?} ({:?}) score={:.1} moon(limb={:.1}° h={:.1}° v={:.1}°) sun(limb={:.1}° h={:.1}° v={:.1}°) phase={:.1}%",
-                i + 1, e.datetime, e.winner, e.tier, e.score,
-                e.moon_theta_limb, e.moon_horizontal, e.moon_vertical,
-                e.sun_theta_limb, e.sun_horizontal, e.sun_vertical,
-                e.moon_phase,
-            );
-        }
+        let dataset = HourlyDataset { entries };
+        let json = serde_json::to_string(&dataset)?;
+        std::fs::write(&out_path, &json)?;
 
-        let best = entries.remove(0);
-        let scan = ScanResult { best, entries };
+        eprintln!("Saved {} entries to {}", dataset.entries.len(), out_path.display());
 
-        let path = std::path::Path::new("scan_results.json");
-        let json = serde_json::to_string_pretty(&scan)?;
-        std::fs::write(path, &json)?;
-        eprintln!("\nSaved scan results to {}", path.display());
+        // Also regenerate scan_results.json from this data
+        let mut scan_entries: Vec<ScanEntry> = dataset.entries.iter().map(|he| {
+            let w = he.data.satellites.iter()
+                .find(|s| s.satellite == he.data.winner)
+                .unwrap();
+            let score = w.moon_theta_em.min(w.sun_theta_em);
+            let sat_mag = mag(&w.sat_pos);
+            let sat_dir = [w.sat_pos[0] / sat_mag, w.sat_pos[1] / sat_mag, w.sat_pos[2] / sat_mag];
+
+            ScanEntry {
+                datetime: he.datetime.clone(),
+                winner: he.data.winner,
+                tier: w.tier,
+                moon_theta_limb: w.moon_theta_limb,
+                moon_horizontal: w.moon_horizontal,
+                moon_vertical: w.moon_vertical,
+                moon_visible: w.moon_visible,
+                sun_theta_limb: w.sun_theta_limb,
+                sun_horizontal: w.sun_horizontal,
+                sun_vertical: w.sun_vertical,
+                sun_visible: w.sun_visible,
+                moon_phase: he.data.moon_phase,
+                moon_distance: he.data.moon_distance,
+                score,
+                sat_dir,
+                moon_pos: he.data.moon_pos,
+                sun_dir: he.data.sun_dir,
+            }
+        }).collect();
+
+        scan_entries.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+
+        let best = scan_entries.remove(0);
+        eprintln!("Best: {} {:?} score={:.1}", best.datetime, best.winner, best.score);
+        let scan = ScanResult { best, entries: scan_entries };
+
+        let scan_json = serde_json::to_string_pretty(&scan)?;
+        std::fs::write("scan_results.json", &scan_json)?;
 
         Ok(())
     }
