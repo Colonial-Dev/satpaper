@@ -455,6 +455,7 @@ pub fn render_composite(
     background: Option<&Image<Box<[u8]>>>,
     width: u32,
     height: u32,
+    artistic: bool,
 ) -> Image<Box<[u8]>> {
     let aspect = width as f64 / height as f64;
     let dolly = compute_dolly(view, aspect);
@@ -471,17 +472,20 @@ pub fn render_composite(
         _ => (0.0, 0.0),
     };
 
+    // Artistic mode: positions are accurate, but bodies are rendered 2× size
+    let size_scale = if artistic { 2.0 } else { 1.0 };
+
     let earth_cx = width as f64 / 2.0 - coi_h * ppd;
     let earth_cy = height as f64 / 2.0 + coi_v * ppd;
-    let earth_r = dolly.earth_radius_deg * ppd;
+    let earth_r = dolly.earth_radius_deg * ppd * size_scale;
 
     let moon_cx = earth_cx + dolly.moon_h * ppd;
     let moon_cy = earth_cy - dolly.moon_v * ppd;
-    let moon_r = dolly.moon_radius_deg * ppd;
+    let moon_r = dolly.moon_radius_deg * ppd * size_scale;
 
     let sun_cx = earth_cx + dolly.sun_h * ppd;
     let sun_cy = earth_cy - dolly.sun_v * ppd;
-    let sun_r = dolly.sun_radius_deg * ppd;
+    let sun_r = dolly.sun_radius_deg * ppd * size_scale;
 
     let mut canvas = if let Some(bg) = background {
         use fimg::scale::Lanczos3;
@@ -573,8 +577,9 @@ pub fn compose(
     background: Option<&Image<Box<[u8]>>>,
     star_chart: bool,
     star_chart_bin: Option<&str>,
+    artistic: bool,
 ) -> Result<Image<Box<[u8]>>> {
-    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, false)
+    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, artistic, false)
 }
 
 pub fn compose_historical(
@@ -584,8 +589,9 @@ pub fn compose_historical(
     background: Option<&Image<Box<[u8]>>>,
     star_chart: bool,
     star_chart_bin: Option<&str>,
+    artistic: bool,
 ) -> Result<Image<Box<[u8]>>> {
-    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, true)
+    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, artistic, true)
 }
 
 fn compose_inner(
@@ -595,6 +601,7 @@ fn compose_inner(
     background: Option<&Image<Box<[u8]>>>,
     star_chart: bool,
     star_chart_bin: Option<&str>,
+    artistic: bool,
     historical: bool,
 ) -> Result<Image<Box<[u8]>>> {
     let data = orbital::closest_satellite(utc_datetime, None)?;
@@ -738,10 +745,11 @@ fn compose_inner(
         // sat_dir for starfield = -shifted_boresight
         let star_dir = [-shifted_boresight[0], -shifted_boresight[1], -shifted_boresight[2]];
 
+        let star_fov = if artistic { dolly.fov_deg * 2.0 } else { dolly.fov_deg };
         crate::stars::generate_starfield_cached(
             winner.satellite.id(),
             &star_dir,
-            dolly.fov_deg,
+            star_fov,
             dolly.roll_deg,
             width,
             height,
@@ -753,7 +761,7 @@ fn compose_inner(
 
     let bg = starfield.as_ref().or(background);
 
-    Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), bg, width, height))
+    Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), bg, width, height, artistic))
 }
 
 /// Load a ScanResult from a JSON file.
@@ -1150,7 +1158,7 @@ mod tests {
         // North marker on earth placeholder
         draw_circle(&mut earth_img.as_mut(), cx, cy - r * 0.7, r * 0.1, [255, 255, 255]);
 
-        let img = render_composite(view, &earth_img, Some(&moon_img), sun_img.as_ref(), None, 1920, 1080);
+        let img = render_composite(view, &earth_img, Some(&moon_img), sun_img.as_ref(), None, 1920, 1080, false);
 
         let out = Path::new("/tmp/spacepaper_real_composite.png");
         img.save(out);

@@ -34,8 +34,37 @@ Spacepaper calculates which of those satellites currently has the best view with
 
 If you run it every hour, you'll get a new view each time. A few times a month, the ~stars~celestial bodies align, and the view is especially breathtaking.
 
-You can render the result on a custom background, including `backgrounds/starmap.png`, which is from NASA's [An Elsewhere Starfield](https://svs.gsfc.nasa.gov/4856/). I'm working on star-charter integration, which will enable you to also generate an accurate starfield for the background.
+## Backgrounds
 
+By default, Spacepaper renders Earth, Moon, and Sun against a black background. There are two ways to add a starfield:
+
+### Star-charter (recommended)
+
+The `--star-chart` flag generates an astronomically accurate starfield using [star-charter](https://github.com/dcf21/star-charter). The starfield is rendered for the correct region of sky behind Earth and includes B-V spectral star coloring, subtle glow on bright stars, and the Milky Way.
+
+```sh
+# If starchart.bin is on your PATH:
+spacepaper --star-chart -x 1920 -y 1080 -t ~/Pictures
+
+# Or specify the path to the binary:
+spacepaper --star-chart --star-chart-bin /path/to/starchart.bin -x 1920 -y 1080 -t ~/Pictures
+```
+
+Starfield images are cached in `/tmp/spacepaper_stars_*.png` and only regenerated when the satellite or field of view changes. Delete these files to force a refresh.
+
+To build star-charter from source, see its [README](https://github.com/dcf21/star-charter). You'll need Cairo and GSL development libraries.
+
+### Custom background image
+
+The `-b`/`--background-image` flag lets you use any image as the background. For example, NASA's [An Elsewhere Starfield](https://svs.gsfc.nasa.gov/4856/) works well:
+
+```sh
+spacepaper -b backgrounds/starmap.png -x 1920 -y 1080 -t ~/Pictures
+```
+
+The image will be resized to fit your resolution if needed. Most common formats (PNG, JPEG, TIFF, WebP) are supported.
+
+> **Note:** `--star-chart` takes precedence over `-b` when both are specified.
 
 ## Installation
 ### Automatically Supported Environments
@@ -79,11 +108,12 @@ Description=Run Spacepaper on login.
 
 # You should adjust these values as needed/preferred.
 [Service]
-Environment=SPACEPAPER_SATELLITE=goes-east
 Environment=SPACEPAPER_RESOLUTION_X=2560
 Environment=SPACEPAPER_RESOLUTION_Y=1440
-Environment=SPACEPAPER_DISK_SIZE=94
 Environment=SPACEPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
+# Optional: enable starfield background (requires star-charter)
+# Environment=SPACEPAPER_STAR_CHART=true
+# Environment=SPACEPAPER_STAR_CHART_BIN=/path/to/starchart.bin
 
 ExecStart=/var/home/colonial/.cargo/bin/spacepaper
 Restart=on-failure
@@ -178,15 +208,9 @@ Thanks to `cyberbit`, everything you need to build and run a Spacepaper Docker i
     - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/spacepaper_latest.png`.
 
 ### Advanced
-- `--disk-x`/`SPACEPAPER_DISK_X` - the horizontal position of the disk's center as a percentage of the wallpaper width. Defaults to `50` (centered).
-    - `0` = center of the disk at the left edge, `50` = centered, `100` = center at the right edge.
-    - Values other than `50` will cause the disk to be partially off-screen.
-- `--disk-y`/`SPACEPAPER_DISK_Y` - the vertical position of the disk's center as a percentage of the wallpaper height. Defaults to `50` (centered).
-    - `0` = center of the disk at the top edge, `50` = centered, `100` = center at the bottom edge.
-- `-b`/`--background-image`/`SPACEPAPER_BACKGROUND_IMAGE` - the path to an image to use as the background.
-    - Most common image formats are supported.
-    - For best results, the image should match the specified resolution, but Spacepaper will resize the image to fit if need be.
-    - Spacepaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
+- `-b`/`--background-image`/`SPACEPAPER_BACKGROUND_IMAGE` - path to a custom background image (see [Backgrounds](#backgrounds) above).
+- `--star-chart`/`SPACEPAPER_STAR_CHART` - generate an accurate starfield background using star-charter.
+- `--star-chart-bin`/`SPACEPAPER_STAR_CHART_BIN` - path to the star-charter binary (default: `starchart.bin` on PATH).
 - `-w`/`--wallpaper-command`/`SPACEPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - The command will be run as `sh -c "{command} file://{image_path}"`.

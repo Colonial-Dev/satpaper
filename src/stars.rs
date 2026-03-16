@@ -40,7 +40,7 @@ pub fn generate_starfield(
 
     // Check if binary exists
     if Command::new(bin).arg("--version").output().is_err() {
-        log::debug!("star-charter binary not found at '{bin}', skipping starfield");
+        log::warn!("star-charter binary not found at '{bin}', skipping starfield");
         return None;
     }
 
@@ -76,6 +76,10 @@ fn generate_starfield_inner(
     // compositor applies its roll the stars end up correctly oriented.
     let position_angle = -roll_deg;
 
+    // Scale star size with resolution so stars look the same relative to the frame.
+    // Tuned for 0.6 at 1920px wide.
+    let mag_size_norm = 0.6 * (width as f64 / 1920.0);
+
     let config = format!(
         "DEFAULTS\n\
          coords=ra_dec\n\
@@ -88,11 +92,15 @@ fn generate_starfield_inner(
          output_dpi=100\n\
          position_angle={position_angle:.6}\n\
          star_col=1,1,1\n\
+         star_bv_colour=1\n\
+         star_glow=1\n\
          star_label_col=0,0,0,0\n\
          plot_stars=1\n\
          star_names=0\n\
-         mag_min=10.0\n\
-         maximum_star_count=100000\n\
+         mag_min=11.5\n\
+         mag_max=-2.0\n\
+         mag_size_norm={mag_size_norm:.4}\n\
+         maximum_star_count=200000\n\
          maximum_star_label_count=0\n\
          plot_dso=0\n\
          constellation_sticks=0\n\
@@ -102,11 +110,12 @@ fn generate_starfield_inner(
          plot_equator=0\n\
          plot_ecliptic=0\n\
          plot_galactic_plane=0\n\
-         plot_galaxy_map=0\n\
+         plot_galaxy_map=1\n\
+         galaxy_map_width_pixels=4096\n\
          magnitude_key=0\n\
          great_circle_key=0\n\
          dso_symbol_key=0\n\
-         galaxy_col=0,0,0\n\
+         galaxy_col=0.14,0.12,0.10\n\
          galaxy_col0=0,0,0\n\
          chart_edge_line_width=0\n\
          \n\

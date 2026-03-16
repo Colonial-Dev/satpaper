@@ -71,6 +71,12 @@ pub struct Config {
     /// Defaults to "starchart.bin" (found via PATH).
     #[arg(long, env = "SPACEPAPER_STAR_CHART_BIN")]
     pub star_chart_bin: Option<String>,
+    /// Artistic mode: denser starfield (2x FOV) and bodies rendered at 2x size.
+    ///
+    /// Positions remain astronomically accurate, but Earth, Moon, and Sun are
+    /// drawn twice as large for visual impact.
+    #[arg(long, env = "SPACEPAPER_ARTISTIC", default_value_t = false)]
+    pub artistic: bool,
     /// Generate wallpaper for a historical date/time instead of now.
     ///
     /// Format: YYYY-MM-DDTHH:MM (e.g. 2026-03-03T12:00).

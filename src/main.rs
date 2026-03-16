@@ -68,6 +68,7 @@ fn main() -> Result<()> {
             background.as_ref(),
             config.star_chart,
             config.star_chart_bin.as_deref(),
+            config.artistic,
         ).context("Failed to compose wallpaper")?;
 
         image.save(config.target_path.join(OUTPUT_NAME));
@@ -86,6 +87,7 @@ fn main() -> Result<()> {
             background.as_ref(),
             config.star_chart,
             config.star_chart_bin.as_deref(),
+            config.artistic,
         ).context("Failed to compose wallpaper")?;
 
         image.save(config.target_path.join(OUTPUT_NAME));
@@ -132,6 +134,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         )?;
 
         image.save("./spacepaper_latest.png");
