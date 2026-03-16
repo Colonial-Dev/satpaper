@@ -8,16 +8,15 @@ mod slider;
 mod sun;
 mod wallpaper;
 
-use std::time::Duration;
-use std::thread::sleep;
-
 use anyhow::{Result, Context};
+use chrono::Utc;
 use clap::Parser;
+use fimg::Image;
+use fimg::scale::Lanczos3;
 
 use crate::config::*;
 
 const OUTPUT_NAME: &str = "spacepaper_latest.png";
-const SLEEP_DURATION: Duration = Duration::from_secs(60);
 
 fn main() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
@@ -25,64 +24,66 @@ fn main() -> Result<()> {
     }
 
     env_logger::init();
-    
-    update_wallpaper()
-        .context("An error occurred in the wallpaper updating loop")?;
 
-    Ok(())
-}
-
-fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
-    
-    let mut timestamp = None;
-    
-    loop  {
-        log::debug!("Checking timestamp...");
+    let datetime = Utc::now().format("%Y-%m-%dT%H:%M").to_string();
 
-        let new = match slider::fetch_latest_timestamp(&config) {
-            Ok(ts) => ts,
-            Err(err) => {
-                log::error!("Failed to fetch latest timestamp: {err}");
-                if config.once {
-                    anyhow::bail!("Check aborted (running in --once mode)");
-                }
-                log::error!("Check aborted; waiting until next go round.");
-                timestamp.unwrap_or(0)
-            }
-        };
+    log::info!("Selecting optimal satellite for {datetime}...");
 
-        if timestamp
-            .map_or(true, |old| old != new)
-        {
-            log::info!("Timestamp has changed!");
-            log::debug!("Old timestamp: {timestamp:?}, new timestamp: {new}");
-            log::info!("Fetching updated source and compositing new wallpaper...");
+    let data = orbital::closest_satellite(&datetime, None)
+        .context("Failed to select satellite")?;
+    let winner = data.winner;
 
-            if slider::composite_latest_image(&config)? {
-                timestamp = Some(new);
+    log::info!("Selected satellite: {:?}", winner);
+    log::debug!("Checking timestamp...");
 
-                if config.once {
-                    return Ok(());
-                }
+    let new = slider::fetch_latest_timestamp(winner)
+        .context("Failed to fetch latest timestamp")?;
 
-                wallpaper::set(
-                    config.target_path.join(OUTPUT_NAME),
-                    config.wallpaper_command.as_deref(),
-                )?;
+    let cache_path = format!("/tmp/spacepaper_{}_timestamp", winner.id());
 
-                log::info!("New wallpaper composited and set.");
-            } else if config.once {
-                anyhow::bail!("Composition aborted (running in --once mode)");
-            }
+    if let Ok(cached) = std::fs::read_to_string(&cache_path) {
+        if cached.trim() == new.to_string() {
+            log::info!("Up to date (timestamp {new}).");
+            return Ok(());
         }
-
-        log::debug!("Sleeping for {SLEEP_DURATION:?}...");
-
-        sleep(SLEEP_DURATION);
     }
 
-    #[allow(unreachable_code)]
+    log::info!("Timestamp has changed, fetching updated source and compositing new wallpaper...");
+
+    let background = config.background_image.as_ref().map(|path| {
+        use image::ImageReader;
+
+        let img = ImageReader::open(path)
+            .context("Failed to open background image")?
+            .decode()
+            .context("Failed to decode background image")?
+            .into_rgb8();
+
+        let mut img: Image<Box<[u8]>, 3> = Image::build(img.width(), img.height()).buf(img.into_vec().into_boxed_slice());
+
+        if img.width() != config.resolution_x || img.height() != config.resolution_y {
+            log::info!("Resizing background image to fit...");
+            img = img.scale::<Lanczos3>(config.resolution_x, config.resolution_y);
+        }
+
+        anyhow::Ok(img)
+    }).transpose()?;
+
+    let image = compositor::compose(
+        &datetime,
+        config.resolution_x,
+        config.resolution_y,
+        background.as_ref(),
+    ).context("Failed to compose wallpaper")?;
+
+    image.save(config.target_path.join(OUTPUT_NAME));
+
+    std::fs::write(&cache_path, new.to_string())
+        .context("Failed to write timestamp cache")?;
+
+    log::info!("New wallpaper composited and saved.");
+
     Ok(())
 }
 
@@ -92,21 +93,16 @@ mod tests {
 
     #[test]
     fn generate_wallpaper() -> Result<()> {
-        let config = Config {
-            satellite: Satellite::GOESEast,
-            resolution_x: 2556,
-            resolution_y: 1440,
-            disk_size: 95,
-            disk_x: 50,
-            disk_y: 50,
-            target_path: ".".into(),
-            wallpaper_command: None,
-            once: false,
-            background_image: None
-        };
+        let datetime = Utc::now().format("%Y-%m-%dT%H:%M").to_string();
 
-        slider::composite_latest_image(&config)?;
+        let image = compositor::compose(
+            &datetime,
+            2556,
+            1440,
+            None,
+        )?;
 
+        image.save("./spacepaper_latest.png");
         std::fs::remove_file("./spacepaper_latest.png")?;
 
         Ok(())

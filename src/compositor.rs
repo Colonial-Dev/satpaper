@@ -51,61 +51,42 @@ pub struct DollyView {
     pub roll_deg: f64,          // camera roll applied (degrees)
 }
 
-const BOTH_VISIBLE_THRESHOLD: f64 = 40.0;
+/// Earth diameter fills this fraction of the frame's smaller dimension (ideal).
+const EARTH_SCREEN_FRACTION: f64 = 0.40;
+/// Minimum Earth fraction — if a companion would shrink Earth below this, hide it.
+const MIN_EARTH_FRACTION: f64 = 0.12;
 
 /// Compute dolly zoom parameters from a ScanEntry.
 ///
-/// If both Moon and Sun are within BOTH_VISIBLE_THRESHOLD, shows all three.
-/// Otherwise shows Earth plus the closest companion body.
-/// Dynamic zoom: closer companions get more zoom (ratio 2-5x).
-/// Free roll: companion angle drives camera rotation without clamping.
+/// The dolly zoom moves the camera far from Earth for telephoto compression,
+/// then sets a narrow FOV to keep Earth large on screen. Companions (Moon, Sun)
+/// are shown if they fit within the frame; otherwise Earth fills the frame alone.
 pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
-    let moon_angular_radius = (R_MOON_KM / view.moon_distance).asin().to_degrees();
-    let sun_angular_radius = (R_SUN_KM / AU_KM).asin().to_degrees();
-
     let moon_angle = view.moon_horizontal.hypot(view.moon_vertical);
     let sun_angle = view.sun_horizontal.hypot(view.sun_vertical);
 
-    let show_both = moon_angle < BOTH_VISIBLE_THRESHOLD && sun_angle < BOTH_VISIBLE_THRESHOLD;
-    let (show_moon, show_sun) = if show_both {
-        (true, true)
-    } else if moon_angle <= sun_angle {
-        (true, false)
-    } else {
-        (false, true)
-    };
+    // Camera distance: position for telephoto compression.
+    // Earth angular radius = size_ratio × closest companion's angular radius.
+    let moon_r_from_earth = (R_MOON_KM / view.moon_distance).asin().to_degrees();
+    let sun_r_from_earth = (R_SUN_KM / AU_KM).asin().to_degrees();
 
-    // Size the dolly zoom based on the smallest visible companion.
-    // Dynamic zoom: close companion → more zoom (ratio ~2), far → less zoom (ratio ~5).
-    let companion_radius = match (show_moon, show_sun) {
-        (true, true) => moon_angular_radius.max(sun_angular_radius),
-        (true, false) => moon_angular_radius,
-        (false, true) => sun_angular_radius,
-        _ => unreachable!(),
-    };
+    let closest_is_moon = moon_angle <= sun_angle;
+    let companion_radius = if closest_is_moon { moon_r_from_earth } else { sun_r_from_earth };
+    let companion_sep = if closest_is_moon { moon_angle } else { sun_angle };
+    let size_ratio = 1.5 + 1.0 * (companion_sep / 40.0).clamp(0.0, 1.0);
 
-    let max_sep = match (show_moon, show_sun) {
-        (true, true) => moon_angle.max(sun_angle),
-        (true, false) => moon_angle,
-        (false, true) => sun_angle,
-        _ => unreachable!(),
-    };
-    let size_ratio = 1.5 + 1.0 * (max_sep / 40.0).clamp(0.0, 1.0);
-
-    // Find camera distance where Earth angular radius = size_ratio * companion
     let target_earth_radius = size_ratio * companion_radius;
     let camera_distance = R_EARTH_KM / target_earth_radius.to_radians().sin();
-
     let earth_radius_deg = (R_EARTH_KM / camera_distance).asin().to_degrees();
 
-    // Place camera at this distance along the satellite direction
+    // Place camera along satellite direction
     let cam = [
         view.sat_dir[0] * camera_distance,
         view.sat_dir[1] * camera_distance,
         view.sat_dir[2] * camera_distance,
     ];
 
-    // Build camera frame: boresight toward Earth, up = north projected
+    // Camera frame: boresight toward Earth, up = north projected
     let boresight = orbital::normalize(&[-cam[0], -cam[1], -cam[2]]);
     let north: [f64; 3] = [0.0, 0.0, 1.0];
     let right = orbital::normalize(&orbital::cross(&boresight, &north));
@@ -123,7 +104,13 @@ pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
         (h.atan2(depth).to_degrees(), v.atan2(depth).to_degrees())
     };
 
+    let dist_from_camera = |body_pos: &[f64; 3]| -> f64 {
+        let d = [body_pos[0] - cam[0], body_pos[1] - cam[1], body_pos[2] - cam[2]];
+        orbital::mag(&d)
+    };
+
     let (moon_h, moon_v) = angles_from_camera(&view.moon_pos);
+    let moon_angular_radius = (R_MOON_KM / dist_from_camera(&view.moon_pos)).asin().to_degrees();
 
     let sun_pos = [
         view.sun_dir[0] * AU_KM,
@@ -131,21 +118,22 @@ pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
         view.sun_dir[2] * AU_KM,
     ];
     let (sun_h, sun_v) = angles_from_camera(&sun_pos);
+    let sun_angular_radius = (R_SUN_KM / dist_from_camera(&sun_pos)).asin().to_degrees();
 
-    // Roll the camera so the companion direction drives rotation freely.
-    // When showing both, use the midpoint of the two companions.
-    let roll_deg = {
-        let (target_h, target_v) = if show_both {
-            ((moon_h + sun_h) / 2.0, (moon_v + sun_v) / 2.0)
-        } else if show_moon {
-            (moon_h, moon_v)
-        } else {
-            (sun_h, sun_v)
-        };
-        target_v.atan2(target_h).to_degrees().clamp(-90.0, 90.0)
-    };
+    // --- Dolly zoom FOV: Earth fills EARTH_SCREEN_FRACTION of smaller dim ---
+    // For widescreen: fov = 2 * earth_r * aspect / fraction
+    let ideal_fov = 2.0 * earth_radius_deg * aspect.max(1.0) / EARTH_SCREEN_FRACTION;
+    let max_fov = 2.0 * earth_radius_deg * aspect.max(1.0) / MIN_EARTH_FRACTION;
 
-    // Apply 2D rotation
+    // Pick the closer companion as primary, roll toward it
+    let moon_sep = moon_h.hypot(moon_v);
+    let sun_sep = sun_h.hypot(sun_v);
+    let primary_is_moon = moon_sep <= sun_sep;
+
+    let (primary_h, primary_v) = if primary_is_moon { (moon_h, moon_v) } else { (sun_h, sun_v) };
+
+    // Roll camera to align primary companion horizontally
+    let roll_deg = primary_v.atan2(primary_h).to_degrees().clamp(-90.0, 90.0);
     let roll = roll_deg.to_radians();
     let (sin_r, cos_r) = roll.sin_cos();
     let rotate = |h: f64, v: f64| -> (f64, f64) {
@@ -155,22 +143,53 @@ pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
     let (moon_h, moon_v) = rotate(moon_h, moon_v);
     let (sun_h, sun_v) = rotate(sun_h, sun_v);
 
-    // FOV: frame Earth + visible companions, accounting for aspect ratio.
-    let mut max_h = earth_radius_deg;
-    let mut max_v = earth_radius_deg;
+    // --- Determine which companions fit in frame ---
+    // With COI centering (midpoint), extents from frame center are:
+    //   left:  sep/2 + earth_r   (Earth's far limb)
+    //   right: sep/2 + comp_r    (companion's far edge)
+    // Max extent = sep/2 + earth_r (Earth is always bigger).
+    // Must fit within fov/2 * FRAME_PADDING.
+    let companion_fits = |sep: f64, comp_r: f64, fov: f64| -> bool {
+        sep / 2.0 + earth_radius_deg < fov / 2.0 * FRAME_PADDING
+            && sep / 2.0 + comp_r < fov / 2.0 * FRAME_PADDING
+    };
 
-    if show_moon {
-        max_h = max_h.max(moon_h.abs() + moon_angular_radius);
-        max_v = max_v.max(moon_v.abs() + moon_angular_radius);
-    }
-    if show_sun {
-        max_h = max_h.max(sun_h.abs() + sun_angular_radius);
-        max_v = max_v.max(sun_v.abs() + sun_angular_radius);
-    }
+    let fov_needed = |sep: f64| -> f64 {
+        // sep/2 + earth_r <= fov/2 * FRAME_PADDING
+        // fov >= (sep + 2*earth_r) / FRAME_PADDING
+        (sep + 2.0 * earth_radius_deg) / FRAME_PADDING
+    };
 
-    let fov_from_h = 2.0 * max_h / FRAME_PADDING;
-    let fov_from_v = 2.0 * max_v * aspect / FRAME_PADDING;
-    let fov_deg = fov_from_h.max(fov_from_v);
+    // Try primary companion: expand FOV up to max_fov
+    let primary_sep = if primary_is_moon { moon_h.hypot(moon_v) } else { sun_h.hypot(sun_v) };
+    let primary_needed = fov_needed(primary_sep);
+    let show_primary = primary_needed <= max_fov;
+
+    let fov_with_primary = if show_primary {
+        ideal_fov.max(primary_needed)
+    } else {
+        ideal_fov
+    };
+
+    // Check secondary companion at the resolved FOV
+    let secondary_is_moon = !primary_is_moon;
+    let (secondary_sep, secondary_r) = if secondary_is_moon {
+        (moon_h.hypot(moon_v), moon_angular_radius)
+    } else {
+        (sun_h.hypot(sun_v), sun_angular_radius)
+    };
+    let show_secondary = show_primary && companion_fits(secondary_sep, secondary_r, fov_with_primary);
+
+    let (show_moon, show_sun) = if primary_is_moon {
+        (show_primary, show_secondary)
+    } else {
+        (show_secondary, show_primary)
+    };
+
+    let fov_deg = fov_with_primary;
+
+    // If no companions visible, no roll needed
+    let roll_deg = if show_moon || show_sun { roll_deg } else { 0.0 };
 
     DollyView {
         camera_distance,
@@ -605,6 +624,31 @@ pub fn compose(
             None
         }
     };
+
+    let aspect = width as f64 / height as f64;
+    let dolly = compute_dolly(&view, aspect);
+    let ppd = width as f64 / dolly.fov_deg;
+
+    eprintln!(
+        "Dolly zoom: camera at {:.0} km, FOV {:.2}°, showing {}, roll {:.1}°",
+        dolly.camera_distance,
+        dolly.fov_deg,
+        match (dolly.show_moon, dolly.show_sun) {
+            (true, true) => "Earth+Moon+Sun",
+            (true, false) => "Earth+Moon",
+            (false, true) => "Earth+Sun",
+            _ => "Earth only",
+        },
+        dolly.roll_deg,
+    );
+    eprintln!(
+        "  Earth r={:.0}px, Moon r={:.0}px (h={:.2}° v={:.2}°), Sun r={:.0}px (h={:.2}° v={:.2}°)",
+        dolly.earth_radius_deg * ppd,
+        dolly.moon_radius_deg * ppd,
+        dolly.moon_h, dolly.moon_v,
+        dolly.sun_radius_deg * ppd,
+        dolly.sun_h, dolly.sun_v,
+    );
 
     Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), background, width, height))
 }
@@ -1079,7 +1123,9 @@ mod tests {
 
     #[test]
     fn test_compose_real() -> Result<()> {
-        let img = compose("2026-03-15T12:00", 1920, 1080, None)?;
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M").to_string();
+        eprintln!("Composing for {now}...");
+        let img = compose(&now, 1920, 1080, None)?;
 
         let out = Path::new("/tmp/spacepaper_compose_real.png");
         img.save(out);

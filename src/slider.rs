@@ -24,14 +24,9 @@ const SLIDER_PRODUCT: &str = "geocolor";
 
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-pub fn composite_latest_image(config: &Config) -> Result<bool> {
-    download(config)
-        .and_then(|image| { composite(config, image)?; Ok(true) })
-        .or_else(|err| {
-            log::error!("Failed to download source image: {err}");
-            log::error!("Composition aborted; waiting until next go round.");
-            Ok(false)
-        })
+pub fn composite_latest_image(config: &Config) -> Result<()> {
+    let image = download(config)?;
+    composite(config, image)
 }
 
 /// Download the latest full-disk image for a satellite at a fixed 2048×2048 resolution.
@@ -42,7 +37,9 @@ pub fn download_disk(satellite: Satellite) -> Result<Image<Box<[u8]>>> {
 }
 
 pub fn download(config: &Config) -> Result<Image<Box<[u8]>>> {
-    download_disk_inner(config.satellite, config.disk())
+    let satellite = config.satellite.expect("download requires satellite to be set");
+    let disk = config.disk().expect("download requires disk_size to be set");
+    download_disk_inner(satellite, disk)
 }
 
 fn download_disk_inner(satellite: Satellite, disk_dim: u32) -> Result<Image<Box<[u8]>>> {
@@ -145,7 +142,7 @@ fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
 
         log::info!("Compositing source into destination...");
 
-        let (offset_x, offset_y) = config.disk_offset();
+        let (offset_x, offset_y) = config.disk_offset().expect("composite requires disk_size to be set");
 
         cutout_disk(
             bg.as_mut(),
@@ -159,7 +156,7 @@ fn composite(config: &Config, source: Image<Box<[u8]>>) -> Result<()> {
     else {
         let mut behind = Image::alloc(config.resolution_x, config.resolution_y).boxed();
 
-        let (offset_x, offset_y) = config.disk_offset();
+        let (offset_x, offset_y) = config.disk_offset().expect("composite requires disk_size to be set");
         let bg_w = config.resolution_x as i32;
         let bg_h = config.resolution_y as i32;
 
@@ -272,8 +269,8 @@ fn cutout_disk(
     }
 }
 
-pub fn fetch_latest_timestamp(config: &Config) -> Result<u64> {
-    Ok(Time::fetch(config.satellite)?.as_int())
+pub fn fetch_latest_timestamp(satellite: Satellite) -> Result<u64> {
+    Ok(Time::fetch(satellite)?.as_int())
 }
 
 #[derive(Debug, Deserialize)]
