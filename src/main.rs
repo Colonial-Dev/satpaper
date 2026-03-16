@@ -27,6 +27,8 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let config = Config::parse();
+    std::fs::create_dir_all(&config.target_path)
+        .context("Failed to create target directory")?;
     let historical = config.datetime.is_some();
     let datetime = config.datetime.clone()
         .unwrap_or_else(|| Utc::now().format("%Y-%m-%dT%H:%M").to_string());

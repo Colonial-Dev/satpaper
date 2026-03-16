@@ -86,13 +86,29 @@ fn generate_starfield_inner(
          aspect={aspect:.6}\n\
          width={width_cm:.4}\n\
          output_dpi=100\n\
+         position_angle={position_angle:.6}\n\
          star_col=1,1,1\n\
+         star_label_col=0,0,0,0\n\
+         plot_stars=1\n\
+         star_names=0\n\
+         mag_min=10.0\n\
+         maximum_star_count=100000\n\
+         maximum_star_label_count=0\n\
          plot_dso=0\n\
          constellation_sticks=0\n\
          constellation_names=0\n\
+         constellation_boundaries=0\n\
          show_grid_lines=0\n\
-         plot_stars=1\n\
-         position_angle={position_angle:.6}\n\
+         plot_equator=0\n\
+         plot_ecliptic=0\n\
+         plot_galactic_plane=0\n\
+         plot_galaxy_map=0\n\
+         magnitude_key=0\n\
+         great_circle_key=0\n\
+         dso_symbol_key=0\n\
+         galaxy_col=0,0,0\n\
+         galaxy_col0=0,0,0\n\
+         chart_edge_line_width=0\n\
          \n\
          CHART\n\
          output_filename={output}\n",
@@ -223,5 +239,34 @@ mod tests {
         // Satellite at -Z axis → boresight = +Z → Dec = +90°
         let (_, dec) = sat_dir_to_ra_dec(&[0.0, 0.0, -1.0]);
         assert!((dec - 90.0).abs() < 0.001, "Dec should be +90°, got {dec}");
+    }
+
+    #[test]
+    fn test_generate_starfield() {
+        // Point toward Orion (RA ~5.5h, Dec ~0°) for a star-rich field
+        let ra_h = 5.5;
+        let dec_d = 0.0_f64;
+        let ra_rad = ra_h * std::f64::consts::PI / 12.0;
+        let dec_rad = dec_d.to_radians();
+        // Boresight = -sat_dir, so sat_dir = -boresight
+        let boresight = [dec_rad.cos() * ra_rad.cos(), dec_rad.cos() * ra_rad.sin(), dec_rad.sin()];
+        let sat_dir = [-boresight[0], -boresight[1], -boresight[2]];
+        let bin = "/home/chad/Code/star-charter/bin/starchart.bin";
+        let img = generate_starfield(&sat_dir, 25.0, 0.0, 1920, 1080, Some(bin));
+        if let Some(img) = &img {
+            let out = std::path::Path::new("/tmp/spacepaper_test_starfield.png");
+            img.save(out);
+            eprintln!("Saved starfield test to {}", out.display());
+            assert_eq!(img.width(), 1920);
+            assert_eq!(img.height(), 1080);
+            // Should not be all white — most pixels should be dark
+            let buf = img.buffer();
+            let dark_pixels = buf.chunks(3).filter(|px| px[0] < 30 && px[1] < 30 && px[2] < 30).count();
+            let total = buf.len() / 3;
+            eprintln!("Dark pixels: {dark_pixels}/{total} ({:.1}%)", 100.0 * dark_pixels as f64 / total as f64);
+            assert!(dark_pixels > total / 2, "Starfield should be mostly dark");
+        } else {
+            eprintln!("star-charter not found, skipping");
+        }
     }
 }

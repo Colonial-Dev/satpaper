@@ -144,25 +144,36 @@ pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
     let (sun_h, sun_v) = rotate(sun_h, sun_v);
 
     // --- Determine which companions fit in frame ---
-    // With COI centering (midpoint), extents from frame center are:
-    //   left:  sep/2 + earth_r   (Earth's far limb)
-    //   right: sep/2 + comp_r    (companion's far edge)
-    // Max extent = sep/2 + earth_r (Earth is always bigger).
-    // Must fit within fov/2 * FRAME_PADDING.
-    let companion_fits = |sep: f64, comp_r: f64, fov: f64| -> bool {
-        sep / 2.0 + earth_radius_deg < fov / 2.0 * FRAME_PADDING
-            && sep / 2.0 + comp_r < fov / 2.0 * FRAME_PADDING
+    // Check both horizontal and vertical extents separately. With COI at the
+    // midpoint between Earth and companion, the max extent from frame center is
+    // sep_axis/2 + earth_r (or comp_r). This must fit within fov_axis/2 * padding.
+    let vfov = |fov_h: f64| fov_h / aspect;
+
+    let companion_fits = |h: f64, v: f64, comp_r: f64, fov: f64| -> bool {
+        let half_h = fov / 2.0 * FRAME_PADDING;
+        let half_v = vfov(fov) / 2.0 * FRAME_PADDING;
+        let coi_h = h.abs() / 2.0;
+        let coi_v = v.abs() / 2.0;
+        // Earth's far edge and companion's far edge must fit in both axes
+        coi_h + earth_radius_deg < half_h
+            && coi_h + comp_r < half_h
+            && coi_v + earth_radius_deg < half_v
+            && coi_v + comp_r < half_v
     };
 
-    let fov_needed = |sep: f64| -> f64 {
-        // sep/2 + earth_r <= fov/2 * FRAME_PADDING
-        // fov >= (sep + 2*earth_r) / FRAME_PADDING
-        (sep + 2.0 * earth_radius_deg) / FRAME_PADDING
+    let fov_needed = |h: f64, v: f64| -> f64 {
+        // Horizontal constraint: fov_h >= (|h| + 2*earth_r) / FRAME_PADDING
+        let needed_h = (h.abs() + 2.0 * earth_radius_deg) / FRAME_PADDING;
+        // Vertical constraint: fov_v >= (|v| + 2*earth_r) / FRAME_PADDING
+        //   fov_h / aspect >= (|v| + 2*earth_r) / FRAME_PADDING
+        //   fov_h >= aspect * (|v| + 2*earth_r) / FRAME_PADDING
+        let needed_v = aspect * (v.abs() + 2.0 * earth_radius_deg) / FRAME_PADDING;
+        needed_h.max(needed_v)
     };
 
     // Try primary companion: expand FOV up to max_fov
-    let primary_sep = if primary_is_moon { moon_h.hypot(moon_v) } else { sun_h.hypot(sun_v) };
-    let primary_needed = fov_needed(primary_sep);
+    let (primary_h, primary_v) = if primary_is_moon { (moon_h, moon_v) } else { (sun_h, sun_v) };
+    let primary_needed = fov_needed(primary_h, primary_v);
     let show_primary = primary_needed <= max_fov;
 
     let fov_with_primary = if show_primary {
@@ -173,12 +184,12 @@ pub fn compute_dolly(view: &ScanEntry, aspect: f64) -> DollyView {
 
     // Check secondary companion at the resolved FOV
     let secondary_is_moon = !primary_is_moon;
-    let (secondary_sep, secondary_r) = if secondary_is_moon {
-        (moon_h.hypot(moon_v), moon_angular_radius)
+    let (secondary_h, secondary_v, secondary_r) = if secondary_is_moon {
+        (moon_h, moon_v, moon_angular_radius)
     } else {
-        (sun_h.hypot(sun_v), sun_angular_radius)
+        (sun_h, sun_v, sun_angular_radius)
     };
-    let show_secondary = show_primary && companion_fits(secondary_sep, secondary_r, fov_with_primary);
+    let show_secondary = show_primary && companion_fits(secondary_h, secondary_v, secondary_r, fov_with_primary);
 
     let (show_moon, show_sun) = if primary_is_moon {
         (show_primary, show_secondary)
@@ -679,11 +690,57 @@ fn compose_inner(
     );
 
     // Generate starfield background if enabled (overrides user-supplied background)
+    //
+    // The starfield must be centered on the COI (center of interest), not on Earth,
+    // because render_composite offsets Earth from image center to frame companions.
+    // We shift the boresight by the COI offset in the camera's right/up plane.
     let starfield = if star_chart && background.is_none() {
         eprintln!("Generating starfield background...");
+
+        let (coi_h, coi_v) = match (dolly.show_moon, dolly.show_sun) {
+            (true, true) => (
+                (dolly.moon_h + dolly.sun_h) / 3.0,
+                (dolly.moon_v + dolly.sun_v) / 3.0,
+            ),
+            (true, false) => (dolly.moon_h / 2.0, dolly.moon_v / 2.0),
+            (false, true) => (dolly.sun_h / 2.0, dolly.sun_v / 2.0),
+            _ => (0.0, 0.0),
+        };
+
+        // Compute camera frame vectors (same as compute_dolly)
+        let boresight = orbital::normalize(&[-sat_dir[0], -sat_dir[1], -sat_dir[2]]);
+        let north: [f64; 3] = [0.0, 0.0, 1.0];
+        let right = orbital::normalize(&orbital::cross(&boresight, &north));
+        let up = orbital::cross(&right, &boresight);
+
+        // Apply camera roll to right/up
+        let roll_rad = dolly.roll_deg.to_radians();
+        let (sin_r, cos_r) = roll_rad.sin_cos();
+        let right_rolled = [
+            right[0] * cos_r + up[0] * sin_r,
+            right[1] * cos_r + up[1] * sin_r,
+            right[2] * cos_r + up[2] * sin_r,
+        ];
+        let up_rolled = [
+            -right[0] * sin_r + up[0] * cos_r,
+            -right[1] * sin_r + up[1] * cos_r,
+            -right[2] * sin_r + up[2] * cos_r,
+        ];
+
+        // Shift boresight by COI offset (small angle, in degrees)
+        let h_rad = coi_h.to_radians();
+        let v_rad = coi_v.to_radians();
+        let shifted_boresight = orbital::normalize(&[
+            boresight[0] + right_rolled[0] * h_rad + up_rolled[0] * v_rad,
+            boresight[1] + right_rolled[1] * h_rad + up_rolled[1] * v_rad,
+            boresight[2] + right_rolled[2] * h_rad + up_rolled[2] * v_rad,
+        ]);
+        // sat_dir for starfield = -shifted_boresight
+        let star_dir = [-shifted_boresight[0], -shifted_boresight[1], -shifted_boresight[2]];
+
         crate::stars::generate_starfield_cached(
             winner.satellite.id(),
-            &sat_dir,
+            &star_dir,
             dolly.fov_deg,
             dolly.roll_deg,
             width,
