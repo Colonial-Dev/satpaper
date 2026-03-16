@@ -76,9 +76,9 @@ fn generate_starfield_inner(
     // compositor applies its roll the stars end up correctly oriented.
     let position_angle = -roll_deg;
 
-    // Scale star size with resolution so stars look the same relative to the frame.
+    // Scale star size with resolution — sublinear (sqrt) so stars stay subtle at high res.
     // Tuned for 0.6 at 1920px wide.
-    let mag_size_norm = 0.6 * (width as f64 / 1920.0);
+    let mag_size_norm = 0.6 * (width as f64 / 1920.0).sqrt();
 
     let config = format!(
         "DEFAULTS\n\
