@@ -560,6 +560,31 @@ pub fn compose(
     width: u32,
     height: u32,
     background: Option<&Image<Box<[u8]>>>,
+    star_chart: bool,
+    star_chart_bin: Option<&str>,
+) -> Result<Image<Box<[u8]>>> {
+    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, false)
+}
+
+pub fn compose_historical(
+    utc_datetime: &str,
+    width: u32,
+    height: u32,
+    background: Option<&Image<Box<[u8]>>>,
+    star_chart: bool,
+    star_chart_bin: Option<&str>,
+) -> Result<Image<Box<[u8]>>> {
+    compose_inner(utc_datetime, width, height, background, star_chart, star_chart_bin, true)
+}
+
+fn compose_inner(
+    utc_datetime: &str,
+    width: u32,
+    height: u32,
+    background: Option<&Image<Box<[u8]>>>,
+    star_chart: bool,
+    star_chart_bin: Option<&str>,
+    historical: bool,
 ) -> Result<Image<Box<[u8]>>> {
     let data = orbital::closest_satellite(utc_datetime, None)?;
 
@@ -596,8 +621,11 @@ pub fn compose(
         sun_dir: data.sun_dir,
     };
 
-    eprintln!("Downloading Earth imagery from {:?}...", winner.satellite);
-    let earth_img = crate::slider::download_disk(winner.satellite)?;
+    eprintln!("Downloading Earth imagery from {:?}{}...", winner.satellite, if historical { " (historical)" } else { "" });
+    let earth_img = crate::slider::download_disk_for(
+        winner.satellite,
+        if historical { Some(utc_datetime) } else { None },
+    )?;
 
     eprintln!("Fetching moon image...");
     let moon_img = match crate::moon::fetch_moon_image(utc_datetime) {
@@ -650,7 +678,25 @@ pub fn compose(
         dolly.sun_h, dolly.sun_v,
     );
 
-    Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), background, width, height))
+    // Generate starfield background if enabled (overrides user-supplied background)
+    let starfield = if star_chart && background.is_none() {
+        eprintln!("Generating starfield background...");
+        crate::stars::generate_starfield_cached(
+            winner.satellite.id(),
+            &sat_dir,
+            dolly.fov_deg,
+            dolly.roll_deg,
+            width,
+            height,
+            star_chart_bin,
+        )
+    } else {
+        None
+    };
+
+    let bg = starfield.as_ref().or(background);
+
+    Ok(render_composite(&view, &earth_img, moon_img.as_ref(), sun_img.as_ref(), bg, width, height))
 }
 
 /// Load a ScanResult from a JSON file.
@@ -1125,7 +1171,7 @@ mod tests {
     fn test_compose_real() -> Result<()> {
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M").to_string();
         eprintln!("Composing for {now}...");
-        let img = compose(&now, 1920, 1080, None)?;
+        let img = compose(&now, 1920, 1080, None, false, None)?;
 
         let out = Path::new("/tmp/spacepaper_compose_real.png");
         img.save(out);
@@ -1149,7 +1195,7 @@ mod tests {
         }
 
         let bg = load_image(bg_path)?;
-        let img = compose("2026-03-15T12:00", 1920, 1080, Some(&bg))?;
+        let img = compose("2026-03-15T12:00", 1920, 1080, Some(&bg), false, None)?;
 
         let out = Path::new("/tmp/spacepaper_compose_starmap.png");
         img.save(out);
@@ -1160,4 +1206,5 @@ mod tests {
 
         Ok(())
     }
+
 }

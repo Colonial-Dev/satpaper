@@ -6,6 +6,7 @@ use anyhow::{Result, Context};
 use fimg::{OverlayAt, Image as Img, scale::Lanczos3};
 use rayon::prelude::*;
 use serde::{Deserialize, de};
+use std::collections::HashMap;
 
 use ureq::AgentBuilder;
 
@@ -267,6 +268,139 @@ fn cutout_disk(
             }
         }
     }
+}
+
+/// Download the latest full-disk image for a satellite, or historical imagery
+/// if `utc_datetime` is provided (format: `YYYY-MM-DDTHH:MM`).
+pub fn download_disk_for(satellite: Satellite, utc_datetime: Option<&str>) -> Result<Image<Box<[u8]>>> {
+    match utc_datetime {
+        Some(dt) => {
+            let timestamp = fetch_closest_timestamp(satellite, dt)?;
+            download_disk_at(satellite, timestamp)
+        }
+        None => download_disk(satellite),
+    }
+}
+
+/// Find the SLIDER timestamp closest to the requested UTC datetime.
+///
+/// Fetches `{date}_by_hour.json` and picks the timestamp nearest to the target.
+pub fn fetch_closest_timestamp(satellite: Satellite, utc_datetime: &str) -> Result<u64> {
+    // Parse "YYYY-MM-DDTHH:MM" -> date string "YYYYMMDD" and target minutes-since-midnight
+    anyhow::ensure!(utc_datetime.len() >= 16, "datetime must be YYYY-MM-DDTHH:MM");
+    let date_str = format!(
+        "{}{}{}",
+        &utc_datetime[0..4],
+        &utc_datetime[5..7],
+        &utc_datetime[8..10]
+    );
+    let target_hour: u32 = utc_datetime[11..13].parse()?;
+    let target_min: u32 = utc_datetime[14..16].parse()?;
+    let target_minutes = target_hour * 60 + target_min;
+
+    let url = format!(
+        "{SLIDER_BASE_URL}/data/json/{}/{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{date_str}_by_hour.json",
+        satellite.id()
+    );
+
+    let json: String = ureq::get(&url)
+        .timeout(TIMEOUT)
+        .call()?
+        .into_string()?;
+
+    let parsed: ByHour = serde_json::from_str(&json)?;
+
+    // Flatten all timestamps from all hours
+    let mut best: Option<u64> = None;
+    let mut best_diff: u32 = u32::MAX;
+
+    for (_hour_key, timestamps) in &parsed.timestamps_int {
+        for &ts in timestamps {
+            // Timestamp format: YYYYMMDDHHmmSS — extract HH and mm
+            let ts_hour = ((ts / 10000) % 100) as u32;
+            let ts_min = ((ts / 100) % 100) as u32;
+            let ts_minutes = ts_hour * 60 + ts_min;
+            let diff = ts_minutes.abs_diff(target_minutes);
+            if diff < best_diff {
+                best_diff = diff;
+                best = Some(ts);
+            }
+        }
+    }
+
+    best.context("No timestamps found for the requested date")
+}
+
+/// Download a full-disk image using a specific SLIDER timestamp.
+fn download_disk_at(satellite: Satellite, timestamp: u64) -> Result<Image<Box<[u8]>>> {
+    // Extract date components from timestamp (YYYYMMDDHHmmSS)
+    let year = (timestamp / 10_000_000_000) as u16;
+    let month = ((timestamp / 100_000_000) % 100) as u8;
+    let day = ((timestamp / 1_000_000) % 100) as u8;
+
+    let disk_dim: u32 = 2048;
+    let tile_count = satellite.tile_count();
+    let tile_size = disk_dim / tile_count;
+
+    let agent = AgentBuilder::new()
+        .timeout(TIMEOUT)
+        .user_agent("spacepaper")
+        .build();
+
+    let tiles = (0..tile_count)
+        .flat_map(|x| (0..tile_count).map(move |y| (x, y)))
+        .par_bridge()
+        .map(|(x, y)| -> Result<_> {
+            let url = format!(
+                "{SLIDER_BASE_URL}/data/imagery/{year:04}/{month:02}/{day:02}/{}---{SLIDER_SECTOR}/{SLIDER_PRODUCT}/{timestamp}/{:02}/{x:03}_{y:03}.png",
+                satellite.id(),
+                satellite.max_zoom()
+            );
+
+            log::info!("Scraping tile at ({x}, {y}).");
+
+            let resp = agent.get(&url).call()?;
+            let len: usize = resp
+                .header("Content-Length")
+                .expect("Response header should have Content-Length")
+                .parse()?;
+
+            let mut data = Vec::with_capacity(len);
+            resp.into_reader().read_to_end(&mut data)?;
+            let dec = png::Decoder::new(std::io::Cursor::new(data));
+            let mut reader = dec.read_info()?;
+            let mut buf = satellite.tile_image();
+            let info = reader.next_frame(unsafe { buf.buffer_mut() })?;
+            debug_assert!(matches!(info.color_type, png::ColorType::Rgb));
+            let buf = buf.scale::<Lanczos3>(tile_size, tile_size);
+
+            log::info!(
+                "Finished scraping tile at ({x}, {y}). Size: {:.2}KiB",
+                len as f32 / 1024.0
+            );
+
+            Ok((x, y, buf))
+        });
+
+    log::info!("Stitching tiles...");
+    let stitched = Mutex::new(Image::alloc(disk_dim, disk_dim).boxed());
+    tiles.try_for_each(|a| {
+        let (y, x, buf) = a?;
+        unsafe {
+            stitched
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .overlay_at(&buf, x * tile_size, y * tile_size)
+        };
+        anyhow::Ok(())
+    })?;
+
+    Ok(stitched.into_inner().unwrap())
+}
+
+#[derive(Debug, Deserialize)]
+struct ByHour {
+    timestamps_int: HashMap<String, Vec<u64>>,
 }
 
 pub fn fetch_latest_timestamp(satellite: Satellite) -> Result<u64> {

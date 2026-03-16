@@ -55,11 +55,28 @@ pub struct Config {
     #[arg(short, long, env = "SPACEPAPER_WALLPAPER_COMMAND")]
     pub wallpaper_command: Option<String>,
     /// A background image to use instead of the default pure black.
-    /// 
-    /// For best results, the image should match the specified resolution, 
+    ///
+    /// For best results, the image should match the specified resolution,
     /// but Spacepaper will resize the image to fit if need be.
     #[arg(short, long, env = "SPACEPAPER_BACKGROUND_IMAGE")]
     pub background_image: Option<PathBuf>,
+    /// Enable star chart background using star-charter.
+    ///
+    /// When enabled, generates an astronomically accurate starfield behind Earth
+    /// using the star-charter tool. Falls back to black if star-charter is not available.
+    #[arg(long, env = "SPACEPAPER_STAR_CHART", default_value_t = false)]
+    pub star_chart: bool,
+    /// Path to the star-charter binary.
+    ///
+    /// Defaults to "starchart.bin" (found via PATH).
+    #[arg(long, env = "SPACEPAPER_STAR_CHART_BIN")]
+    pub star_chart_bin: Option<String>,
+    /// Generate wallpaper for a historical date/time instead of now.
+    ///
+    /// Format: YYYY-MM-DDTHH:MM (e.g. 2026-03-03T12:00).
+    /// SLIDER imagery is available for roughly the past 10 months.
+    #[arg(short = 'D', long, env = "SPACEPAPER_DATETIME")]
+    pub datetime: Option<String>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]

@@ -1,33 +1,41 @@
 <h1 align="center">Spacepaper</h1>
 <h3 align="center">Display near-real-time satellite imagery on your desktop.</h3>
 
-<p align="center">
-<img src="https://img.shields.io/github/actions/workflow/status/Colonial-Dev/Satpaper/rust.yml">
-<img src="https://img.shields.io/github/license/Colonial-Dev/Satpaper">
-<img src="https://img.shields.io/github/stars/Colonial-Dev/Satpaper">
-</p>
-
 <p align = "center">
 <img src=".github/spacepaper_latest.png" width = 768>
 <br>
 <i> (Click to see full-size version) </i>
 </p>
 
-Spacepaper generates live wallpapers for your desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu).
+Spacepaper generates scientifically accurate (enough) live wallpapers for your desktop, using near-real-time imagery from [RAMMB SLIDER](https://rammb-slider.cira.colostate.edu), [NASA's Moon Phase and Libration API](https://svs.gsfc.nasa.gov/5587/), [NASA SDO Sun This Week](https://svs.gsfc.nasa.gov/5577/), and [star-charter](https://github.com/dcf21/star-charter).
 
-There are several satellites to choose from, each covering a different region of the world.
+![spacepaper](.github/spacepaper_latest.png)
+
+> I was once on a US military ship, having breakfast in the wardroom (officers lounge) when the Operations Officer (OPS) walks in. This guy was the definition of NOT a morning person; he's still half asleep, bleary eyed... basically a zombie with a bagel. He sits down across from me to eat his bagel and is just barely conscious. My back is to the outboard side of the ship, and the morning sun is blazing in one of the portholes putting a big bright-ass circle of light right on his barely conscious face. He's squinting and chewing and basically just remembering how to be alive for today. It's painful to watch.
+> But then zombie-OPS stops chewing, slowly picks up the phone, and dials the bridge. In his well-known I'm-still-totally-asleep voice, he says "heeeey. It's OPS. Could you... shift our barpat... yeah, one six five. Thanks." And puts the phone down. And then he just sits there. Squinting. Waiting.
+> And then, ever so slowly, I realize that that big blazing spot of sun has begun to slide off the zombie's face and onto the wall behind him. After a moment it clears his face and he blinks slowly a few times and the brilliant beauty of what I've just witnessed begins to overwhelm me. By ordering the bridge to adjust the ship's back-and-forth patrol by about 15 degrees, he's changed our course just enough to reposition the sun off of his face. He's literally just redirected thousands of tons of steel and hundreds of people so that he could get the sun out of his eyes while he eats his bagel. I am in awe.
+> He slowly picks up his bagel and for a moment I'm terrified at the thought that his own genius may escape him, that he may never appreciate the epic brilliance of his laziness (since he's not going to wake up for another hour). But between his next bites he pauses, looks at me, and gives me the faintest, sly grin, before returning to gnaw slowly on his zombie bagel.
+
+_[reddit](https://www.reddit.com/r/AskReddit/comments/1rgpdf/comment/cdnafqe/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button)_
+
+Now imagine you're in your favorite sci-fi universe with cheap and easy space travel. You're the captain of a ship on a long-term deployment to Sol system. You're awaiting orders, but in the meantime, you've been told to just hang out somewhere near Earth.
+
+Wouldn't you want to move your ship around so that your main viewscreen has an amazing view of the Earth, along with the moon and/or sun, while you eat your morning bagel?
+
+That's what Spacepaper simulates. When you run it, Spacepaper gets the current position of the Earth, the moon, and five different geosynchronous imaging satellites:
+
 - GOES East (used in the sample image - covers most of North and South America)
 - GOES West (Pacific Ocean and parts of the western US)
 - Himawari (Oceania and East Asia)
 - Meteosat 9 (Africa, Middle East, India, Central Asia)
 - Meteosat 10 (Atlantic Ocean, Africa, Europe)
 
-It's also possible to specify a custom background image, if desired.
+Spacepaper calculates which of those satellites currently has the best view with the moon or sun nearby. It 'flies' you to that satellite, then [dolly zooms](https://en.wikipedia.org/wiki/Dolly_zoom) the ship and its camera to give you the best view.
 
-## Warning - Data Usage
-Spacepaper downloads satellite imagery at the highest available resolution and downscales it to fit your specifications. The exact download size varies depending on which satellite you are using and the image contents, but it's typically in the ballpark of twenty megabytes.
+If you run it every hour, you'll get a new view each time. A few times a month, the ~stars~celestial bodies align, and the view is especially breathtaking.
 
-If you're on a metered and/or severely bandwidth-limited connection, twenty megabytes every ten to fifteen minutes can really add up. You have been warned!
+You can render the result on a custom background, including `backgrounds/starmap.png`, which is from NASA's [An Elsewhere Starfield](https://svs.gsfc.nasa.gov/4856/). I'm working on star-charter integration, which will enable you to also generate an accurate starfield for the background.
+
 
 ## Installation
 ### Automatically Supported Environments
