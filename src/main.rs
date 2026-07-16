@@ -4,8 +4,7 @@ mod config;
 mod slider;
 mod wallpaper;
 
-use std::time::Duration;
-use std::thread::sleep;
+use std::{thread::sleep, time::Duration};
 
 use anyhow::{Result, Context};
 use clap::Parser;
@@ -13,7 +12,6 @@ use clap::Parser;
 use crate::config::*;
 
 const OUTPUT_NAME: &str = "satpaper_latest.png";
-const SLEEP_DURATION: Duration = Duration::from_secs(60);
 
 fn main() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
@@ -30,6 +28,7 @@ fn main() -> Result<()> {
 
 fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
+    let sleep_duration = Duration::from_secs(config.sleep_duration);
     
     let mut timestamp = None;
     
@@ -66,9 +65,9 @@ fn update_wallpaper() -> Result<()> {
             }
         }
 
-        log::debug!("Sleeping for {SLEEP_DURATION:?}...");
+        log::debug!("Sleeping for {sleep_duration:?}...");
 
-        sleep(SLEEP_DURATION);
+        sleep(sleep_duration);
     }
 
     #[allow(unreachable_code)]
@@ -88,8 +87,9 @@ mod tests {
             disk_size: 95,
             target_path: ".".into(),
             wallpaper_command: None,
+            sleep_duration: 60,
             once: false,
-            background_image: None
+            background_image: None,
         };
 
         slider::composite_latest_image(&config)?;

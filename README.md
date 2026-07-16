@@ -76,6 +76,7 @@ Environment=SATPAPER_RESOLUTION_X=2560
 Environment=SATPAPER_RESOLUTION_Y=1440
 Environment=SATPAPER_DISK_SIZE=94
 Environment=SATPAPER_TARGET_PATH=/var/home/colonial/.local/share/backgrounds/
+Environment=SATPAPER_SLEEP_DURATION=60
 
 ExecStart=/var/home/colonial/.cargo/bin/satpaper
 Restart=on-failure
@@ -124,6 +125,8 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
         <string>94</string>
         <key>SATPAPER_TARGET_PATH</key>
         <string>/Users/${YOUR_USERNAME}/.local/share/backgrounds/</string>
+        <key>SATPAPER_SLEEP_DURATION</key>
+        <string>60</string>
     </dict>
     <key>ProgramArguments</key>
     <array>
@@ -177,6 +180,7 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - The command will be run as `sh -c "{command} file://{image_path}"`.
+- `--sleep-duration`/`SATPAPER_SLEEP_DURATION` - seconds between checks for new imagery (default: `60`; must be positive).
 - `-o`/`--once`/`SATPAPER_ONCE` - whether or not to only run once.
     - By default, Satpaper is designed to run as a daemon - it stays resident once launched and periodically attempts to update your wallpaper.
     - With `--once` set, Satpaper will generate one wallpaper and terminate, without altering your existing wallpaper.
