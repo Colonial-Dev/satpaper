@@ -22,6 +22,11 @@ There are several satellites to choose from, each covering a different region of
 - Meteosat 9 (Africa, Middle East, India, Central Asia)
 - Meteosat 10 (Atlantic Ocean, Africa, Europe)
 
+Satpaper can also select SLIDER sectors and products. Full-disk imagery remains the default.
+Regional sectors such as GOES CONUS and mesoscale imagery are cropped and scaled to fill the
+requested wallpaper resolution. Some regional feeds have irregular source footprints, so their
+source-side no-data corners remain black. Sector availability varies by satellite.
+
 It's also possible to specify a custom background image, if desired.
 
 ## Warning - Data Usage
@@ -72,6 +77,7 @@ Description=Run Satpaper on login.
 # You should adjust these values as needed/preferred.
 [Service]
 Environment=SATPAPER_SATELLITE=goes-east
+Environment=SATPAPER_SECTOR=full_disk
 Environment=SATPAPER_RESOLUTION_X=2560
 Environment=SATPAPER_RESOLUTION_Y=1440
 Environment=SATPAPER_DISK_SIZE=94
@@ -116,6 +122,8 @@ launchctl start $HOME/Library/LaunchAgents/com.satpaper.plist
     <dict>
         <key>SATPAPER_SATELLITE</key>
         <string>goes-east</string>
+        <key>SATPAPER_SECTOR</key>
+        <string>full_disk</string>
         <key>SATPAPER_RESOLUTION_X</key>
         <string>2560</string>
         <key>SATPAPER_RESOLUTION_Y</key>
@@ -160,11 +168,21 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
 ### Basic/Required
 - `-s`/`--satellite`/`SATPAPER_SATELLITE` - the satellite to source imagery from. 
     - Possible values: `goes-east`, `goes-west`, `himawari`, `meteosat9`, and `meteosat10`.
+- `-c`/`--sector`/`SATPAPER_SECTOR` - the SLIDER sector to source imagery from.
+    - Defaults to `full_disk`.
+    - GOES East/West support `full_disk`, `conus`, `mesoscale_01`, and `mesoscale_02`.
+    - Himawari supports `full_disk`, `japan`, and `mesoscale_01`.
+    - Meteosat currently supports `full_disk` only.
+- `-p`/`--product`/`SATPAPER_PRODUCT` - the SLIDER imagery product.
+    - Defaults to the selected sector's preferred product (`geocolor` for full-disk imagery and
+      GOES regional imagery; `band_13` for Himawari regional imagery).
+    - Product availability varies by satellite and sector. Invalid combinations fail before tile downloads.
 - `-x`/`--resolution-x`/`SATPAPER_RESOLUTION_X` (and equivalents for the `y` dimension) - the width/height of the generated wallpaper.
     - Any arbitary resolution should work, including vertical aspect ratios.
 - `-d`/`--disk-size`/`SATPAPER_DISK_SIZE` - the size of the "disk" (Earth) relative to the generated wallpaper's smaller dimension.
     - Required to be an integer value in the range `[1, 100]` inclusive, mapping to a percentage value.
     - For most desktop environments, a value in the 90-95 range will give the most detail while preventing parts from being cut off by UI elements like taskbars.
+    - Applies to `full_disk`; regional sectors fill the output resolution.
 - `-t`/`--target-path`/`SATPAPER_TARGET_PATH` - where the generated wallpaper should be saved.
     - Satpaper will output to a file called "satpaper_latest.png" at this path.
     - Example: if the argument is `/home/user/Pictures`, the output will be at `/home/user/Pictures/satpaper_latest.png`.
@@ -174,6 +192,7 @@ Thanks to `cyberbit`, everything you need to build and run a Satpaper Docker ima
     - Most common image formats are supported.
     - For best results, the image should match the specified resolution, but Satpaper will resize the image to fit if need be.
     - Satpaper uses a basic "marching" algorithm to find the bounds of the Earth and apply transparency to the original image, but it's not perfect - some black bordering and/or jagged edges may remain. (Unfortunately, the canonical algorithm for this problem - flood filling - doesn't really work, because it tends to end up eating into the Earth at night. If you have an idea for a better solution, please let me know!)
+    - Applies to `full_disk`; regional sectors fill the output and ignore this option.
 - `-w`/`--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` - custom command to run when a wallpaper is generated.
     - This overrides the automatic update handling.
     - The command will be run as `sh -c "{command} file://{image_path}"`.

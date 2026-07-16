@@ -30,18 +30,26 @@ fn main() -> Result<()> {
 
 fn update_wallpaper() -> Result<()> {
     let config = Config::parse();
+    config
+        .source_spec()
+        .context("Invalid satellite and sector configuration")?;
     
     let mut timestamp = None;
     
     loop  {
         log::debug!("Checking timestamp...");
 
-        let new = slider::fetch_latest_timestamp(&config)
-            .unwrap_or_else(|err| {
+        let new = match slider::fetch_latest_timestamp(&config) {
+            Ok(timestamp) => timestamp,
+            Err(err) if config.once => {
+                return Err(err).context("Failed to fetch the selected SLIDER source")
+            }
+            Err(err) => {
                 log::error!("Failed to fetch latest timestamp: {err}");
                 log::error!("Check aborted; waiting until next go round.");
                 timestamp.unwrap_or(0)
-            });
+            }
+        };
 
         if timestamp
             .map_or(true, |old| old != new)
@@ -50,7 +58,7 @@ fn update_wallpaper() -> Result<()> {
             log::debug!("Old timestamp: {timestamp:?}, new timestamp: {new}");
             log::info!("Fetching updated source and compositing new wallpaper...");
 
-            if slider::composite_latest_image(&config)? {
+            if slider::composite_latest_image(&config, new)? {
                 timestamp = Some(new);
 
                 if config.once {
@@ -85,6 +93,8 @@ mod tests {
             satellite: Satellite::GOESEast,
             resolution_x: 2556,
             resolution_y: 1440,
+            sector: Sector::FullDisk,
+            product: None,
             disk_size: 95,
             target_path: ".".into(),
             wallpaper_command: None,
@@ -92,7 +102,8 @@ mod tests {
             background_image: None
         };
 
-        slider::composite_latest_image(&config)?;
+        let timestamp = slider::fetch_latest_timestamp(&config)?;
+        slider::composite_latest_image(&config, timestamp)?;
 
         std::fs::remove_file("./satpaper_latest.png")?;
 
