@@ -9,5 +9,6 @@ services:
       - SATPAPER_RESOLUTION_X=2560
       - SATPAPER_RESOLUTION_Y=1440
       - SATPAPER_DISK_SIZE=95
+      - SATPAPER_SLEEP_DURATION=60
     volumes:
       - ../images:/home/rust/images
