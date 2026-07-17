@@ -31,14 +31,14 @@ If you're on a metered and/or severely bandwidth-limited connection, twenty mega
 
 ## Installation
 ### Automatically Supported Environments
-- GNOME
-- KDE
+- GNOME (`XDG_CURRENT_DESKTOP=GNOME` or `XDG_CURRENT_DESKTOP=ubuntu:GNOME`)
+- KDE (`XDG_CURRENT_DESKTOP=KDE`)
 - Windows (tested to work on 10/11)
 - macOS (tested to work on Ventura)
     - Satpaper will ask for System Event permission when running for the first time - you will need to grant access then restart the program for it to work.
 
 If your environment is not supported, you have a few options:
-- Use the `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` argument to specify a command to run whenever a new wallpaper is generated. 
+- Use `--wallpaper-command`/`SATPAPER_WALLPAPER_COMMAND` with your desktop's wallpaper-setting command. This bypasses `XDG_CURRENT_DESKTOP`; use it for Cinnamon and other unsupported desktops instead of claiming GNOME or KDE.
 - Use the `--once` flag to turn Satpaper into a one-off wallpaper generator, allowing it to be integrated into a larger script or program.
 
 PRs to add automatic support are also welcome!
@@ -90,6 +90,29 @@ WantedBy=default.target
 nano $HOME/.config/systemd/user/satpaper.service
 systemctl --user enable satpaper
 systemctl --user start satpaper
+```
+
+##### Troubleshooting Linux desktop detection
+
+Satpaper's built-in Linux handling recognizes only `GNOME`, `ubuntu:GNOME`, and
+`KDE`. Check the exact value from a terminal in your graphical session:
+
+```sh
+printf '%s\n' "$XDG_CURRENT_DESKTOP"
+```
+
+If the terminal reports a supported value but the service does not inherit it,
+add that exact value to the unit's `[Service]` section:
+
+```systemd
+Environment=XDG_CURRENT_DESKTOP=GNOME
+```
+
+Then reload and restart the unit:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user restart satpaper
 ```
 
 #### Running as a `launchd` service (Mac)
